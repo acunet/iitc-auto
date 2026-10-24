@@ -1,10 +1,15 @@
 package id.acunet.portalprobe
 
+import android.text.SpannableString
+import android.text.Spanned
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarLocation
+import androidx.car.app.model.CarText
+import androidx.car.app.model.Distance
+import androidx.car.app.model.DistanceSpan
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.Metadata
 import androidx.car.app.model.Place
@@ -37,10 +42,22 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
 
         val rows = ItemList.Builder().apply {
             portals.forEachIndexed { i, p ->
+                // Host menolak row non-browsable tanpa distance span. Span ditempel lewat
+                // SpannableString (CarSpan itu CharacterStyle); CarText.create(CharSequence)
+                // mengekstrak span-nya. Sendiri, CarText nggak punya overload varargs span.
+                val titleText = SpannableString(p.name)
+                titleText.setSpan(
+                    DistanceSpan.create(
+                        Distance.create(p.distanceM.toDouble(), Distance.UNIT_METERS)
+                    ),
+                    0,
+                    titleText.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
                 addItem(
                     Row.Builder()
-                        .setTitle(p.name)
-                        .addText("L${p.level} · ${p.team} · ${p.distanceM} m")
+                        .setTitle(CarText.create(titleText))
+                        .addText("L${p.level} · ${p.team}")
                         // Marker di peta host berasal dari Metadata -> Place, bukan dari daftar itu sendiri.
                         .setMetadata(Metadata.Builder().setPlace(places[i]).build())
                         .build()

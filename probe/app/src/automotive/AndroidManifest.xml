@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Manifest khusus flavor `automotive` (Android Automotive OS).
+
+  CarAppActivity adalah entry point yang dipakai car launcher AAOS: app kelihatan di
+  app grid, dan saat di-tap host langsung membuka CarAppService kita sebagai
+  templated car app. Di flavor `projected` (Android Auto) entry point ini nggak
+  dipakai sama sekali — APK project di-klaim lewat CarAppService + "Unknown sources".
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+
+        <activity
+            android:name="androidx.car.app.activity.CarAppActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="distractionOptimized"
+                android:value="true" />
+        </activity>
+
+    </application>
+</manifest>

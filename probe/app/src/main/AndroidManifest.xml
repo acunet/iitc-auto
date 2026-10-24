@@ -8,6 +8,12 @@
     -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
 
+    <!-- setCurrentLocationEnabled(true) di template menuntut izin lokasi ini, kalau tidak
+         host melempar "MISSING_PERMISSION: The car app does not have the required location
+         permission(s)" dan proses app-nya mati. Perlu juga diminta saat runtime. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
 
     <application
@@ -19,14 +25,25 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
+        <!-- WAJIB untuk host templated (AAOS): tanpa ini host menolak app dengan
+             "Min API level not declared in manifest (androidx.car.app.minCarApiLevel)".
+             Nilai = level Car App API terendah yang benar-benar dipakai app.
+             1 = cukup untuk PlaceListMapTemplate. Naikkan ke 7 kalau nanti pakai
+             MapWithContentTemplate (surface). -->
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
+
+        <!-- CATATAN GATE 0a (AAOS): kalau activity ini punya intent-filter LAUNCHER,
+             car launcher AAOS memperlakukan app sebagai app biasa dan bukan sebagai
+             templated car app, jadi CarAppService-nya nggak pernah dibuka host.
+             Buat tes template di AAOS, filter LAUNCHER-nya dilepas. -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
+
+        <!-- Entry point CarAppActivity (khusus flavor automotive/AAOS) ada di
+             app/src/automotive/AndroidManifest.xml — di flavor projected nggak dipakai. -->
 
         <service
             android:name=".ProbeCarAppService"
