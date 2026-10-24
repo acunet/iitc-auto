@@ -71,6 +71,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
                 <!-- Used for Samsung Multi-Window support -->
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER"/>
+
+                <!-- ANDROID AUTO (parked app): bikin IITC ini bisa dijalankan LANGSUNG di
+                     layar head unit Android Auto secara fullscreen, alias IITC asli (WebView)
+                     kelihatan di layar mobil. Syarat resmi Google (training/cars/parked/auto):
+                     cukup kategori ini di intent-filter sebuah activity, dan activity TIDAK
+                     boleh punya meta-data distractionOptimized=true supaya sistem otomatis
+                     menghentikannya begitu mobil jalan (mode parked = hanya saat berhenti).
+                     Butuh HP Android 15+; di HP ini Android 16. Distribusi Play nggak mungkin
+                     (kategori browser nggak didukung di Android Auto) — ini murni sideload. -->
+                <category android:name="android.intent.category.CAR_LAUNCHER"/>
             </intent-filter>
 
             <!-- Receives the search request. -->
