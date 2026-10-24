@@ -24,3 +24,10 @@ desktop.ini
 # Scratch / probe artefak
 /tmp/
 *.log
+
+# Dependency Node (dipakai build.py buat bundling userscript IITC)
+node_modules/
+
+# Asset hasil generate `python build.py mobile` (userscript + plugin IITC).
+# Jangan di-commit: 1,5 MB per build dan selalu bisa diregenerate.
+mobile/app/src/main/assets/
