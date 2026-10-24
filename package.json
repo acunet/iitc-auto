@@ -1,0 +1,37 @@
+{
+  "name": "iitc-ce",
+  "description": "Ingress Intel Total Conversion (Community Edition)",
+  "homepage": "https://iitc.app/",
+  "repository": "https://github.com/IITC-CE/ingress-intel-total-conversion.git",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "^9.9.1",
+    "chai": "^4.3.6",
+    "eslint": "^9.9.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.9.0",
+    "jquery": "^4.0.0",
+    "jsdoc": "^4.0.4",
+    "jsdom": "^29.1.1",
+    "mocha": "^11.7.6",
+    "lightningcss-cli": "^1.33.0",
+    "prettier": "^3.3.3",
+    "sinon": "^21.0.0",
+    "taffydb": "^2.7.3",
+    "tui-jsdoc-template": "^1.2.2"
+  },
+  "scripts": {
+    "build": "npm run build:local",
+    "build:local": "./build.py local",
+    "build:mobile": "./build.py mobile",
+    "fileserver": "./web_server_local.py local",
+    "docs": "jsdoc -c jsdoc-conf.json -R README.md -d ./docs",
+    "test": "mocha -r test/_mocks.js --exit"
+  },
+  "allowScripts": {
+    "lightningcss-cli@1.33.0": true
+  }
+}

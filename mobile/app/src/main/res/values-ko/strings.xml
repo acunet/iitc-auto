@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pref_about_title">IITC Mobile 정보</string>
+    <string name="download_description">최신 Intel 패키지를 다운로드 중…</string>
+    <string name="close">닫기</string>
+    <string name="drawer_close">네비게이션 메뉴 닫기</string>
+    <string name="drawer_open">네비게이션 메뉴 보기</string>
+    <string name="action_settings">설정</string>
+    <string name="activity_save_to_file">파일로 저장</string>
+    <string name="activity_share_to_clipboard">클립보드에 복사</string>
+    <string name="activity_share">다음을 사용하여 공유…</string>
+    <string name="activity_plugins">IITC 플러그인</string>
+    <string name="activity_settings">IITC Mobile 설정</string>
+    <string name="debug_run">실행</string>
+    <string name="clear_log">로그 지우기</string>
+    <string name="pref_external_storage_sum">재시작이 필요합니다! 캐시를 SD카드 저장합니다. 외장 저장소가 설치되어있어야 합니다.</string>
+    <string name="pref_persistent_zoom">부드러운 확대/축소</string>
+    <string name="install_dialog_msg">&lt;p&gt;IITC모바일에 다음 외부 플러그인을 설치합니다: &lt;p&gt;%1$s &lt;p&gt;&lt;b&gt;주의:&lt;/b&gt; 외부 소스의 자바스크립트에는 유해 코드가 포함될 수 있습니다 (스파이웨어 등)! &lt;p&gt;계속하시겠습니까?</string>
+    <string name="label_overlay_layers">오버레이 레이어</string>
+    <string name="label_base_layer">베이스 레이어</string>
+    <string name="label_highlighter">하이라이터</string>
+    <string name="tab_browser">Intel</string>
+    <string name="tab_share">공유</string>
+    <string name="tab_map">위치</string>
+    <string name="sign_in_action">로그인</string>
+    <string name="password">비밀번호</string>
+    <string name="username">아이디</string>
+    <string name="sign_in_to">다음으로 로그인 %1$s %2$s</string>
+    <string name="notice_do_not_show_again">다시 표시 안 함</string>
+    <string name="msg_take_screenshot">스크린샷을 찍는 중…</string>
+    <string name="msg_prepare_screenshot">준비중…</string>
+    <string name="msg_copied">클립보드에 복사…</string>
+    <string name="intent_error">주소를 열 수 없음</string>
+    <string name="search_hint">위치 검색</string>
+    <string name="login_failed">로그인 실패.</string>
+    <string name="choose_account_to_login">로그인에 사용할 계정 선택</string>
+    <string name="menu_delete">삭제</string>
+    <string name="menu_copy">복사</string>
+    <string name="menu_plugins_add">외부 플러그인 추가</string>
+    <string name="menu_send_screenshot">스크린샷 전송</string>
+    <string name="menu_debug">디버그</string>
+    <string name="menu_open_plugins">플러그인</string>
+    <string name="menu_search">검색</string>
+    <string name="menu_clear_cookies">쿠키 삭제</string>
+    <string name="menu_locate">위치 가져오기</string>
+    <string name="menu_layer_chooser">레이어 선택기</string>
+    <string name="menu_toggle_fullscreen">전체 화면</string>
+    <string name="menu_reload">IITC 재시작</string>
+    <string name="pref_secure_updates_sum">활성화된 경우 https를 사용하는 업데이트만 허용됩니다</string>
+    <string name="pref_secure_updates">보안 설정된 업데이트만 허용</string>
+    <string name="pref_force_plugin_update_sum">활성화된 모든 사용자 플러그인 업데이트</string>
+    <string name="pref_force_plugin_update">플러그인 강제 업데이트</string>
+    <string name="pref_update_plugins_interval_sum">IITC모바일이 새 플러그인 버전을 확인하는 간격</string>
+    <string name="pref_update_plugins_interval">플러그인 업데이트 확인 간격</string>
+    <string name="pref_update_plugins_cat">사용자 플러그인 업데이트</string>
+    <string name="pref_android_menu_sum">IITC모바일 메뉴에 표시할 항목 선택</string>
+    <string name="pref_android_menu">IITC모바일 메뉴 설정</string>
+    <string name="pref_fake_user_agent_sum">IITC모바일을 인텔맵의 데스크톱 브라우저로 표시합니다. 참고: 데스크톱 모드만 사용하려면 \'데스크톱 모드 강제\' 설정을 사용하기 바랍니다</string>
+    <string name="pref_fake_user_agent">가짜 유저 에이전트 사용</string>
+    <string name="pref_disable_splash">시작 화면 비활성화</string>
+    <string name="pref_enable_dev_mode">개발자 모드 활성화</string>
+    <string name="pref_advanced_options_sum">개발자 옵션 및 고급 설정</string>
+    <string name="pref_advanced_options">고급 설정</string>
+    <string name="pref_press_twice_to_exit_sum">예기치 않은 종료를 방지합니다</string>
+    <string name="pref_press_twice_to_exit">뒤로가기 버튼을 두 번 눌러 종료하기</string>
+    <string name="pref_external_storage">타일 캐시를 외부 저장소로 이동</string>
+    <string name="pref_dex_desktop_sum">DeX모드 사용시 데스크탑 모드로 표시합니다</string>
+    <string name="pref_dex_desktop">삼성 DeX모드 지원</string>
+    <string name="pref_force_desktop_sum">태블릿에서 사용하기에 적합합니다. 스마트폰에시 불편할 수 있습니다</string>
+    <string name="pref_force_desktop">데스크톱 모드 강제</string>
+    <string name="pref_fullscreen_sum">전체 화면 모드에서 표시할 항목. 참고 : IITC모바일은 여전히 탐색 창을 통해 제어 할 수 있습니다</string>
+    <string name="pref_fullscreen">전체화면에서 표시할 항목</string>
+    <string name="pref_user_zoom_sum">멀티 터치가 가능한 장치에서도 +/- 버튼을 표시합니다.</string>
+    <string name="pref_user_zoom">확대/축소 컨트롤 표시</string>
+    <string name="pref_persistent_zoom_sum">현재위치 버튼을 눌렀을 때 확대/축소 수준을 변경하지 않습니다</string>
+    <string name="pref_user_location">지도에 사용자 위치 표시</string>
+    <string name="pref_plugins_title">사용 가능한 플러그인</string>
+    <string name="pref_misc_cat">기타</string>
+    <string name="pref_ui_cat">UI</string>
+    <string name="toggle_map">지도 보이기/숨기기</string>
+    <string name="install_dialog_top">외부 플러그인을 설치하시겠습니까\?</string>
+    <string name="version">버전 표시</string>
+    <string name="pref_about_text">&lt;h1&gt;Ingress Intel Total Conversion Mobile&lt;/h1&gt; &lt;p&gt;&lt;b&gt;빌드 버전: ${build_version}&lt;/b&gt; &lt;br&gt;&lt;b&gt;IITC 버전: ${iitc_version}&lt;/b&gt; &lt;p&gt;&lt;b&gt;by ${cradle_link}, ${fkloft_link} 및 기여자&lt;/b&gt; &lt;p&gt;&lt;b&gt;아이콘 제공 ${giuseppe_lucido_link}&lt;/b&gt; &lt;p&gt;&lt;b&gt;IITC Mobile&lt;/b&gt; 은&lt;i&gt;Ingress Intel Total Conversion (IITC)&lt;/i&gt; 유저스크립트에 최적화된 브라우저입니다. &lt;h3&gt;커뮤니티:&lt;/h3&gt; • 새 버전을 확인하거나 데스크탑 버전을 보려면 ${website_link} 를 방문하세요.&lt;br&gt; • ${tg_iitc_news_link} 텔레그램 채널을 팔로우하여 공지사항을 확인하고 ${tg_iitc_group_link} 채팅에 참여하세요.&lt;br&gt; • ${reddit_iitc_link} 레딧 커뮤니티에 참여하세요 - 도움을 요청하고 다른 사용자와 상의할 수 있는 장소입니다.&lt;br&gt; • 새로운 기능 추가와 버그 제보는 ${bugtracker_link}에 제안해주세요.&lt;br&gt; &lt;h3&gt;개발자:&lt;/h3&gt; ${github_iitc_link} on Github. &lt;h3&gt;IITC 라이선스:&lt;/h3&gt; ${ISC_license_text}</string>
+    <string name="bugtracker">버그트래커</string>
+    <string name="pref_enable_dev_mode_sum">활성화된 경우 모든 IITC 소스는 안드로이드 기기의 외부 저장소에서 로드됩니다. $IITC_folder/build/mobile/ 에서 /sdcard/IITC_Mobile/dev/로 모든 소스를 복사해 주십시오.</string>
+    <string name="iitc_website">IITC 홈페이지</string>
+    <string name="update_notifications_title">새로운 IITC 모바일 버전 사용 가능</string>
+    <string name="update_notifications_text">새 버전 %1$s를 사용할 수 있습니다. 다운로드하려면 누르세요.</string>
+    <string name="update_notifications_action_hide_forever">영구적으로 숨기기</string>
+    <string name="tab_prime">Ingress</string>
+    <string name="menu_delete_plugin">삭제</string>
+    <string name="plugin_deleted">\"%s\" 플러그인이 삭제됨</string>
+    <string name="menu_share_plugin_update_url">업데이트 URL 공유</string>
+    <string name="menu_share_plugin_file">플러그인 파일 공유</string>
+    <string name="notice_info">&lt;p&gt;힌트: 정보 화면을 여는 다른 방법: &lt;p&gt; • 포탈을 1초간 길게 누릅니다.&lt;br&gt; • 상태 표시줄의 좌측 절반을 탭합니다.&lt;br&gt;</string>
+    <string name="pref_language">언어</string>
+    <string name="pref_hide_fullscreen_notification_bar">시스템 알림 표시줄</string>
+    <string name="pref_hide_fullscreen_action_bar">IITC 액션 바</string>
+    <string name="appintro_location_title">위치 권한</string>
+    <string name="appintro_location_description">IITC-CE 모바일은 손쉬운 탐색을 위해 사용자 위치 액세스 권한이 필요합니다.
+\n
+\n 하지만 걱정하지 마세요. 당사는 사용자의 위치에 대한 데이터를 어디에도 전송하지 않습니다.</string>
+    <string name="appintro_navigation_description"> 화면 왼쪽 가장자리에서 스와이프(또는 메뉴 아이콘 클릭)하여 <i>탐색 창</i>을 불러옵니다.
+\n 지도로 돌아가려면 뒤로 아이콘을 클릭하세요.
+\n
+\n 이제 일부 플러그인(예: <i>포탈 목록</i> 및 <i>북마크</i>)이 <i>탐색 창</i>에 표시되어 빠르게 액세스할 수 있습니다.
+\n 더 이상 정보 창에 표시되지 않습니다. </string>
+    <string name="file_browser_is_required">파일을 선택할 수 있는 앱이 없습니다. 다른 파일 탐색기를 설치 해주세요!</string>
+    <string name="toast_press_twice_to_exit">종료하려면 두 번 누르세요</string>
+    <string name="pref_plugins">IITC 플러그인</string>
+    <string name="pane_map">지도</string>
+    <string name="delete_plugin_question">정말로 \"%s\" 플러그인을 삭제하시겠습니까\?</string>
+    <string name="button_confirm_description">예</string>
+    <string name="button_cancel_description">아니오</string>
+    <string name="menu_share_plugin_download_url">다운로드 URL 공유</string>
+    <string name="plugin_updated">업데이트된 플러그인</string>
+    <string name="pane_all">전체</string>
+    <string name="pane_faction">진영</string>
+    <string name="pane_alerts">알림</string>
+    <string name="pane_info">정보</string>
+    <string name="update_notifications_channel_name">업데이트 알림</string>
+    <string name="pref_tweaks_cat">트윅</string>
+    <string name="pref_plugins_sum">플러그인은 IITC 환경을 확장/수정합니다. 데스크톱 IITC에서 알려진 대부분의 플러그인은 여기에서 찾을 수 있습니다.</string>
+    <string name="notice_sharing">&lt;p&gt;&lt;em&gt;포탈 공유&lt;/em&gt;를 사용하면 다음을 수행할 수 있습니다. &lt;p&gt; • 다른 사람에게 포탈 링크 보내기&lt;br&gt; • 다른 앱에서 선택한 포탈의 위치 보기&lt;br&gt; • 웹 브라우저에서 포탈 링크 열기 &lt;br&gt; &lt;p&gt;힌트: Google 지도(또는 기타 설치된 내비게이션 소프트웨어)를 선택하면 선택한 포탈로 빠르게 이동할 수 있습니다. &lt;p&gt;이 힌트는 &lt;em&gt;고유 링크&lt;/em&gt;에도 적용됩니다.</string>
+    <string name="notice_extplugins">&lt;p&gt;힌트: &lt;p&gt;IITC 모바일은 외부 플러그인도 로드할 수 있습니다! &lt;p&gt;오른쪽 상단의 (+) 아이콘을 클릭하여 추가하세요. 플러그인 파일은 \'.user.js\'로 끝나야 하며 &lt;b&gt;%1$s&lt;/b&gt;에 복사됩니다&lt;/b&gt;</string>
+    <string name="pref_webview_zoom">글꼴 크기</string>
+    <string name="pref_webview_zoom_defaultValue">시스템 기본값</string>
+    <string name="pref_webview_zoom_sum">정보 패널, 커뮤니케이션, 팝업 창 등의 글꼴/텍스트 크기에 영향을 미칩니다…</string>
+    <string name="appintro_welcome_description">Ingress 플레이어에 없어서는 안 될 도우미의 모바일 버전입니다.
+\n
+\n Ingress 인텔 토탈 컨버전(IITC)은 공식 인텔 Ingress 맵의 오버레이로 작동하는 애드온입니다.
+\n
+\n IITC는 맵 작업 방식을 완전히 바꾸고 하드웨어 가속을 적용하여 효율성을 크게 높이며 다양한 플러그인 사용을 통해 기능을 확장합니다.</string>
+    <string name="pref_hide_fullscreen_status_bar">IITC 상태 바</string>
+    <string name="pref_hide_fullscreen_navigation_bar">시스템 탐색 표시줄</string>
+    <string name="pref_user_location_dont_show">사용자 위치 표시 안 함</string>
+    <string name="pref_user_location_show_position">지도에서 사용자 위치 표시</string>
+    <string name="pref_user_location_show_position_and_orientation">지도에서 사용자 위치 및 방향 표시</string>
+    <string name="pref_update_plugins_interval_disable">비활성화</string>
+    <string name="pref_update_plugins_interval_1_day">1 일</string>
+    <string name="pref_update_plugins_interval_2_days">2 일</string>
+    <string name="pref_update_plugins_interval_1_week">1 주</string>
+    <string name="pref_update_plugins_interval_2_weeks">2 주</string>
+    <string name="menu_plugins_add_url">URL로 플러그인 추가</string>
+    <string name="appintro_navigation_title">네비게이션</string>
+    <string name="appintro_layers_title">레이어/강조</string>
+    <string name="appintro_layers_description"> 화면 오른쪽 가장자리에서 스와이프하거나 액션바에서 레이어 선택 아이콘을 클릭하여 <i>레이어 그리기</i>를 불러옵니다.
+\n
+\n 여기에서 온라인 지도 서비스를 변경하거나 지도에서 필요한 요소의 표시를 활성화/비활성화할 수 있습니다. </string>
+    <string name="appintro_plugins_title">플러그인</string>
+    <string name="appintro_plugins_description">지금 바로 IITC-CE 사용을 시작할 수 있습니다.
+\n
+\n 그러나 공식 인텔 인그레스 맵에 비해 가장 큰 장점은 기능을 확장하는 플러그인이 풍부하다는 것입니다.
+\n
+\n 설정에서 공식 또는 외부 플러그인을 추가할 수 있습니다.</string>
+    <string name="show_appintro_screen_title">소개 화면 표시</string>
+    <string name="plugins_permission_denied">권한이 거부되었습니다. 플러그인을 추가할 수 없습니다.</string>
+    <string name="plugins_permission_granted">권한이 부여되었습니다. 작업을 반복해 주세요.</string>
+    <string name="file_browser_choose_file">파일 선택</string>
+    <string name="plugins_user_plugins">유저 플러그인</string>
+    <string name="plugins_official_plugins">공식 플러그인</string>
+</resources>

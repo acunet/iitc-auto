@@ -1,0 +1,202 @@
+/* global IITC -- eslint */
+
+/**
+ * @file This file provides functions for working with the sidebar.
+ * @module sidebar
+ */
+
+/**
+ * Sets up the sidebar, including player stats, toggle button, large image preview, etc.
+ *
+ * @function setupSidebar
+ */
+window.setupSidebar = function () {
+  window.setupStyles();
+  window.setupPlayerStat();
+  setupSidebarToggle();
+  setupLargeImagePreview();
+  setupAddons();
+  $('#sidebar').show();
+  // setup portal detail display update
+  window.addHook('portalAdded', sidebarOnPortalAdded);
+  window.addHook('portalDetailLoaded', sidebarOnPortalDetailLoaded);
+};
+
+/**
+ * Renders player details into the website. Since the player info is
+ * included as inline script in the original site, the data is static
+ * and cannot be updated.
+ *
+ * @function setupPlayerStat
+ */
+window.setupPlayerStat = function () {
+  // stock site updated to supply the actual player level, AP requirements and XM capacity values
+  var level = window.PLAYER.verified_level;
+  window.PLAYER.level = level; // for historical reasons IITC expects PLAYER.level to contain the current player level
+
+  var n = window.PLAYER.nickname;
+  window.PLAYER.nickMatcher = new RegExp('\\b(' + n + ')\\b', 'ig');
+
+  var ap = parseInt(window.PLAYER.ap);
+  var thisLvlAp = parseInt(window.PLAYER.min_ap_for_current_level);
+  var nextLvlAp = parseInt(window.PLAYER.min_ap_for_next_level);
+
+  if (nextLvlAp) {
+    var lvlUpAp = window.digits(nextLvlAp - ap);
+    var lvlApProg = Math.round(((ap - thisLvlAp) / (nextLvlAp - thisLvlAp)) * 100);
+  } // else zero nextLvlAp - so at maximum level(?)
+
+  var xmMax = parseInt(window.PLAYER.xm_capacity);
+  var xmRatio = Math.round((window.PLAYER.energy / xmMax) * 100);
+
+  var cls = window.PLAYER.team === 'RESISTANCE' ? 'res' : 'enl';
+
+  var t =
+    `Level:\t${level}\n` +
+    `XM:\t${window.PLAYER.energy} / ${xmMax}\n` +
+    `AP:\t${window.digits(ap)}\n` +
+    (nextLvlAp > 0 ? `level up in:\t${lvlUpAp} AP` : 'Maximum level reached(!)') +
+    `\nInvites:\t${window.PLAYER.available_invites}` +
+    `\n\nNote: your player stats can only be updated by a full reload (F5)`;
+
+  $('#playerstat').html(
+    `<h2 title="${t}">
+      ${level}
+      <div id="name">
+        <span class="playername ${cls}">${window.PLAYER.nickname}</span>
+        <a href="https://intel.ingress.com/logout" id="signout">sign out</a>
+      </div>
+      <div id="stats">
+        <sup>XM: ${xmRatio}%</sup>
+        <sub>${nextLvlAp > 0 ? 'level: ' + lvlApProg + '%' : 'max level'}</sub>
+      </div>
+    </h2>`
+  );
+};
+
+/**
+ * Initializes the sidebar toggle functionality.
+ *
+ * @function setupSidebarToggle
+ */
+function setupSidebarToggle() {
+  $('body').addClass('sidebar-open');
+  $('#sidebartoggle').on('click', function () {
+    var toggle = $('#sidebartoggle');
+    var sidebar = $('#scrollwrapper');
+    if (sidebar.is(':visible')) {
+      sidebar.hide();
+      $('body').removeClass('sidebar-open');
+      toggle.html('<span class="toggle open"></span>');
+    } else {
+      sidebar.show();
+      IITC.portal.display.resetScroll();
+      $('body').addClass('sidebar-open');
+      toggle.html('<span class="toggle close"></span>');
+    }
+    $('.ui-tooltip').remove();
+  });
+}
+
+/**
+ * Sets up event listeners for the large portal image view.
+ * On the desktop the photo opens in a dialog;
+ * on a smartphone the full size image is already rendered at the end of the sidebar,
+ * so the click scrolls down to it instead.
+ *
+ * @function setupLargeImagePreview
+ */
+function setupLargeImagePreview() {
+  $('#portaldetails').on('click', '.imgpreview', function (event) {
+    if (IITC.utils.isSmartphone()) {
+      if (event.currentTarget !== event.target) return; // do not fire on #level
+
+      document.querySelectorAll('.ui-tooltip').forEach((tooltip) => tooltip.remove());
+
+      const fullImage = document.querySelector('#sidebar > .fullimg');
+      if (!fullImage) return;
+
+      fullImage.parentElement.scrollTo({ top: fullImage.offsetTop, behavior: 'smooth' });
+      return;
+    }
+
+    var img = this.querySelector('img');
+    // dialogs have 12px padding around the content
+    var dlgWidth = Math.max(img.naturalWidth + 24, 500);
+    // This might be a case where multiple dialogs make sense, for example
+    // someone might want to compare images of multiple portals.  But
+    // usually we only want to show one version of each image.
+    // To support that, we'd need a unique key per portal.  Example, guid.
+    // So that would have to be in the html fetched into details.
+
+    var preview = new Image(img.width, img.height);
+    preview.src = img.src;
+    preview.style = 'margin: auto; display: block';
+    const title = document.querySelector('#portaltitle .value')?.innerText || '';
+    window.dialog({
+      html: preview,
+      title: title,
+      id: 'iitc-portal-image',
+      width: dlgWidth,
+    });
+  });
+}
+
+// fixed Addons ****************************************************************
+
+/**
+ * Updates the permalink href attribute on mouseover and click events.
+ *
+ * @function setPermaLink
+ */
+function setPermaLink() {
+  this.href = IITC.portal.display.makePermalink(null, true);
+}
+
+/**
+ * Sets up additional elements in the sidebar, such as permalink and about dialog.
+ *
+ * @function setupAddons
+ */
+function setupAddons() {
+  IITC.toolbox.addButton({
+    id: 'permalink',
+    label: 'Permalink',
+    title: 'URL link to this map view',
+    action: setPermaLink,
+    mouseover: setPermaLink,
+  });
+
+  IITC.toolbox.addButton({
+    id: 'about-iitc',
+    label: 'About IITC',
+    action: window.aboutIITC,
+    class: 'cursor_help',
+  });
+
+  window.artifact.setup();
+
+  window.RegionScoreboardSetup();
+}
+
+/**
+ * portalAdded callback to update the sidebar
+ *
+ * @function sidebarOnPortalAdded
+ */
+function sidebarOnPortalAdded(data) {
+  if (data.portal.options.guid === window.selectedPortal) {
+    IITC.portal.display.renderDetails(window.selectedPortal);
+  }
+}
+
+/**
+ * portalDetailLoaded callback to update the sidebar
+ *
+ * @function sidebarOnPortalDetailLoaded
+ */
+function sidebarOnPortalDetailLoaded(data) {
+  if (data.success && data.guid === window.selectedPortal) {
+    IITC.portal.display.renderToSidebar(data.portal);
+  }
+}

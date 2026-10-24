@@ -1,0 +1,122 @@
+apply plugin: 'com.android.application'
+
+final BUILD_DATE = new Date().format('yyyy.MM.dd-HH:mm')
+
+def getVersionCodeTimeStamps = { ->
+    def git = 'git log -1 --pretty=format:%ct'
+
+    def proc = git.execute()
+    proc.waitFor()
+    def unixtime = "${proc.in.text}".trim()
+
+    if (unixtime.isEmpty()) {
+        println "Failed to get commit date"
+        return -1
+    }
+    return Integer.parseInt(unixtime)
+}
+
+def metaFDroid(File apkDir, variant) {
+    File outputFile = new File(apkDir, "version_fdroid.txt")
+    outputFile.text = """versionName=${variant.versionName}\nversionCode=${variant.versionCode}"""
+}
+
+android {
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "org.exarhteam.iitc_mobile"
+        minSdk 21
+        targetSdk 36
+        versionCode = getVersionCodeTimeStamps()
+        versionName "0.42.2"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+    }
+    signingConfigs {
+        debug {
+            storeFile file("../keystore/debug.keystore")
+        }
+        release {
+            if (System.getenv("CI")) {
+                storeFile file("../keystore/android.jks")
+                storePassword System.getenv("KEYSTORE_PASS")
+                keyAlias System.getenv("ALIAS_NAME")
+                keyPassword System.getenv("ALIAS_PASS")
+            } else {
+                // We use keystore.properties file for signing data.
+                def keystoreProperties = new Properties()
+                keystoreProperties.load(new FileInputStream(rootProject.file("keystore.properties")))
+
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-test-$BUILD_DATE"
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+            buildConfigField "boolean", "ENABLE_CHECK_APP_UPDATES", "false"
+        }
+        beta {
+            applicationIdSuffix ".beta"
+            versionNameSuffix "-beta-$BUILD_DATE"
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            buildConfigField "boolean", "ENABLE_CHECK_APP_UPDATES", System.getenv("ENABLE_CHECK_APP_UPDATES") == "true" ? "true" : "false"
+        }
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            buildConfigField "boolean", "ENABLE_CHECK_APP_UPDATES", System.getenv("ENABLE_CHECK_APP_UPDATES") == "true" ? "true" : "false"
+        }
+    }
+
+    lint {
+        abortOnError true
+        checkOnly 'NewApi', 'OnClick', 'MissingSuperCall', 'MissingClass', 'WrongConstant', 'UnspecifiedRegisterReceiverFlag'
+    }
+    compileOptions {
+        sourceCompatibility = '1.8'
+        targetCompatibility = '1.8'
+    }
+    namespace 'org.exarhteam.iitc_mobile'
+
+    applicationVariants.all { variant ->
+        variant.getAssembleProvider().configure() {
+            it.doLast {
+                File buildDir = variant.outputs.first().outputFile.parentFile
+                metaFDroid(buildDir, variant)
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.squareup.okhttp3:okhttp:3.12.1'
+    implementation 'com.github.AppIntro:AppIntro:6.3.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.2'
+    implementation 'com.akexorcist:localization:1.2.11'
+    implementation 'org.apache.commons:commons-text:1.8'
+    implementation 'androidx.recyclerview:recyclerview:1.4.0'
+    implementation 'com.melnykov:floatingactionbutton:1.3.0'
+    implementation 'androidx.documentfile:documentfile:1.1.0'
+    testImplementation 'junit:junit:4.12'
+}
+
+task copyUserscripts(type: Copy) {
+    description = 'Updating prebuilt plugins'
+    from '../assets'
+    into 'src/main/assets'
+    include('*')
+    include('**/*')
+}
+
+preBuild.dependsOn copyUserscripts

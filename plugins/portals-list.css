@@ -1,0 +1,239 @@
+#portalslist.mobile {
+  background: transparent;
+  border: 0 none;
+  height: 100%;
+  width: 100%;
+  left: 0;
+  top: 0;
+  position: absolute;
+  overflow: auto;
+}
+
+#portalslist table {
+  margin-top: 5px;
+  border-collapse: collapse;
+  empty-cells: show;
+  width: 100%;
+  clear: both;
+}
+
+#portalslist table td, #portalslist table th {
+  background-color: #1b415e;
+  border-bottom: 1px solid #0b314e;
+  color: white;
+  padding: 3px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#portalslist table th {
+  text-align: center;
+}
+
+#portalslist table .alignR {
+  text-align: right;
+}
+
+#portalslist table.portals td {
+  white-space: nowrap;
+}
+
+#portalslist table th.sortable {
+  cursor: pointer;
+}
+
+#portalslist table .portalTitle {
+  min-width: 120px;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#portalslist .sorted {
+  color: #FFCE00;
+}
+
+#portalslist .filters {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr auto;
+  grid-gap: 1px
+}
+
+#portalslist .filters div {
+  padding: 0.2em 0.3em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: #0005;
+  white-space: nowrap;
+}
+
+#portalslist .filters .count {
+  text-align: right;
+}
+
+#portalslist .filters .active {
+  font-weight: bolder;
+  color: #FFCE00;
+}
+
+#portalslist .filters .filterAll {
+  display: none;
+}
+
+#portalslist.mobile .filters .filterAll {
+  display: block;
+}
+
+/* kitkat fallback */
+#portalslist.mobile .filters .name {
+  float: left;
+}
+
+#portalslist .filters .filterNeu,
+#portalslist .filters .filterEnl,
+#portalslist .filters .filterRes,
+#portalslist .filters .filterMac {
+  grid-row: 1;
+}
+
+#portalslist .filters .filterVis,
+#portalslist .filters .filterCap,
+#portalslist .filters .filterSco {
+  grid-row: 2;
+}
+
+/* 2 columns */
+@media (orientation: portrait) {
+  #portalslist .filters {
+    grid-template-columns: 1fr auto 1fr auto;
+  }
+
+  #portalslist .filters .filterNeu.name,
+  #portalslist .filters .filterRes.name,
+  #portalslist .filters .filterEnl.name,
+  #portalslist .filters .filterMac.name {
+    grid-column: 1;
+  }
+
+  #portalslist .filters .filterNeu.count,
+  #portalslist .filters .filterRes.count,
+  #portalslist .filters .filterEnl.count,
+  #portalslist .filters .filterMac.count {
+    grid-column: 2;
+  }
+
+  #portalslist .filters .filterVis.name,
+  #portalslist .filters .filterCap.name,
+  #portalslist .filters .filterSco.name {
+    grid-column: 3;
+  }
+
+  #portalslist .filters .filterVis.count,
+  #portalslist .filters .filterCap.count,
+  #portalslist .filters .filterSco.count {
+    grid-column: 4;
+  }
+
+  #portalslist .filters .filterNeu,
+  #portalslist .filters .filterVis {
+    grid-row: 1;
+  }
+
+  #portalslist .filters .filterEnl,
+  #portalslist .filters .filterCap {
+    grid-row: 2;
+  }
+
+  #portalslist .filters .filterRes,
+  #portalslist .filters .filterSco {
+    grid-row: 3;
+  }
+
+  #portalslist .filters .filterMac {
+    grid-row: 4;
+  }
+}
+
+#portalslist .filters .filterNeu {
+  background-color: #666;
+}
+
+#portalslist .filterVis.name:before,
+#portalslist .filterCap.name:before,
+#portalslist .filterSco.name:before {
+  content: '';
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 6px;
+  margin: auto;
+  margin-right: 0.2em;
+  vertical-align: -8%;
+}
+
+#portalslist .filterVis:before {
+  background-color: yellow;
+}
+
+#portalslist .filterCap:before {
+  background-color: red;
+}
+
+#portalslist .filterSco:before {
+  background-color: purple;
+}
+
+#portalslist .table-container {
+  overflow-y: hidden;
+}
+
+#portalslist table tr.res td,
+#portalslist .filters .filterRes {
+  background-color: #005684;
+}
+
+#portalslist table tr.enl td,
+#portalslist .filters .filterEnl {
+  background-color: #017f01;
+}
+
+#portalslist table tr.mac td,
+#portalslist .filters .filterMac {
+  background-color: #a00;
+}
+
+#portalslist table tr.none td {
+  background-color: #000;
+}
+
+#portalslist .disclaimer {
+  margin-top: 10px;
+}
+
+#portalslist .history .icon {
+  width: 11px;
+  height: 11px;
+  border-radius: 6px;
+  margin: auto;
+}
+
+#portalslist .history.unvisited .icon{
+  background-color: white;
+}
+
+#portalslist .history.visited .icon {
+  background-color: yellow;
+}
+
+#portalslist .history.captured .icon {
+  background-color: red;
+}
+
+#portalslist .history.scoutControlled .icon {
+  background-color: purple;
+}
+
+.ui-dialog.ui-dialog-portalslist {
+  max-width: calc(100vw - 2px);
+}

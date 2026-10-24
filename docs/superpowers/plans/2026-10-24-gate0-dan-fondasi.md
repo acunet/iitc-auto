@@ -625,9 +625,9 @@ SHA=$(git -C "$TMP" rev-parse HEAD)
 echo "upstream SHA=$SHA"
 
 # README.md kita dipertahankan; README upstream masuk sebagai README-UPSTREAM.md
-rsync -a --delete-excluded \
-  --exclude '.git' --exclude 'README.md' --exclude '.github' \
-  "$TMP"/ "$REPO"/
+# (rsync nggak ada di git-bash host ini -> pakai tar)
+tar cf - --exclude='./.git' --exclude='./.github' --exclude='./README.md' --exclude='./.gitignore' \
+  . | ( cd "$REPO" && tar xf - )
 cp "$TMP/README.md" "$REPO/README-UPSTREAM.md"
 
 printf 'upstream=%s\nsha=%s\ntanggal_import=%s\n' \
