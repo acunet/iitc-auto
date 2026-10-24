@@ -6,6 +6,7 @@ import androidx.car.app.model.Action
 import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarLocation
 import androidx.car.app.model.ItemList
+import androidx.car.app.model.Metadata
 import androidx.car.app.model.Place
 import androidx.car.app.model.PlaceListMapTemplate
 import androidx.car.app.model.PlaceMarker
@@ -19,28 +20,29 @@ private fun colorFor(team: String): CarColor = when (team) {
     else -> CarColor.DEFAULT
 }
 
+private fun toPlace(portal: ProbePortal): Place =
+    Place.Builder(CarLocation.create(portal.lat, portal.lng))
+        .setMarker(
+            PlaceMarker.Builder()
+                .setColor(colorFor(portal.team))
+                .setLabel(portal.team)
+                .build()
+        )
+        .build()
+
 class ProbeScreen(carContext: CarContext) : Screen(carContext) {
     override fun onGetTemplate(): Template {
         val portals = ProbeData.PROBE_PORTALS
+        val places = portals.map(::toPlace)
 
         val rows = ItemList.Builder().apply {
-            portals.forEach { p ->
-                // Marker di peta host berasal dari Row.setMetadata(Place),
-                // bukan cuma dari daftar item-nya.
-                val place = Place.Builder(CarLocation.create(p.lat, p.lng))
-                    .setMarker(
-                        PlaceMarker.Builder()
-                            .setColor(colorFor(p.team))
-                            .setLabel(p.team)
-                            .build()
-                    )
-                    .build()
-
+            portals.forEachIndexed { i, p ->
                 addItem(
                     Row.Builder()
                         .setTitle(p.name)
                         .addText("L${p.level} · ${p.team} · ${p.distanceM} m")
-                        .setMetadata(place)
+                        // Marker di peta host berasal dari Metadata -> Place, bukan dari daftar itu sendiri.
+                        .setMetadata(Metadata.Builder().setPlace(places[i]).build())
                         .build()
                 )
             }
@@ -50,7 +52,8 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
             .setTitle("Portal Probe")
             .setHeaderAction(Action.APP_ICON)
             .setCurrentLocationEnabled(true)
-            .setAnchor(CarLocation.create(portals[0].lat, portals[0].lng))
+            // Perhatian: setAnchor() minta Place (bukan CarLocation) di Car App 1.7.
+            .setAnchor(places.first())
             .setItemList(rows)
             .build()
     }
