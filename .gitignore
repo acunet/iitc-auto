@@ -1,0 +1,26 @@
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
+captures/
+
+# Signing — JANGAN pernah masuk repo
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+*.hprof
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Scratch / probe artefak
+/tmp/
+*.log
