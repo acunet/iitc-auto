@@ -10,6 +10,13 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!-- Mode nyetir di Android Auto: kategori POI cuma boleh minta MAP_TEMPLATES.
+         Jangan tambah NAVIGATION_TEMPLATES/ACCESS_SURFACE (itu kategori Navigation,
+         yang wajib punya turn-by-turn). -->
+    <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
+
+    <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
+
     <!-- Package visibility for Android 11+ (API 30+) -->
     <queries>
         <!-- Text sharing -->
@@ -253,5 +260,28 @@
                 <action android:name="HIDE_FOREVER" />
             </intent-filter>
         </receiver>
+
+        <!-- ============ Layer Android Auto (mode nyetir) ============ -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <!-- WAJIB: tanpa ini host templated menolak app dengan
+             "Min API level not declared in manifest (androidx.car.app.minCarApiLevel)".
+             1 = cukup untuk PlaceListMapTemplate. -->
+        <meta-data
+            android:name="androidx.car.app.minCarApiLevel"
+            android:value="1" />
+
+        <!-- CarAppService: sumber data portal dikirim dari WebView IITC lewat
+             app.sendPortals(json) -> PortalBridge -> layar mobil (PlaceListMapTemplate). -->
+        <service
+            android:name="org.exarhteam.iitc_mobile.car.IitcCarAppService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.car.app.CarAppService" />
+                <category android:name="androidx.car.app.category.POI" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

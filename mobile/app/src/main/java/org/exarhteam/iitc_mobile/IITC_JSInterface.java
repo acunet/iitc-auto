@@ -10,7 +10,12 @@ import android.webkit.JavascriptInterface;
 import android.widget.Toast;
 
 import org.exarhteam.iitc_mobile.IITC_NavigationHelper.Pane;
+import org.exarhteam.iitc_mobile.car.PortalBridge;
 import org.exarhteam.iitc_mobile.share.ShareActivity;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * JavaScript interface for communication between IITC script and Android app.
@@ -116,7 +121,51 @@ public class IITC_JSInterface {
             mIitc.setLoadingState(false);
 
             mIitc.getMapSettings().onBootFinished();
+            injectAutoBridge();
         });
+    }
+
+    /**
+     * Bridge Android Auto: sunting userscript dari asset setelah IITC selesai boot,
+     * supaya nggak perlu install plugin manual dan versinya selalu sejalan dengan APK.
+     */
+    private void injectAutoBridge() {
+        final String script = readAsset("iitc-auto-bridge.js");
+        if (script == null) {
+            Log.d("bridge: asset iitc-auto-bridge.js nggak ada, layar mobil nggak akan dapat data");
+            return;
+        }
+        mIitc.getWebView().evaluateJavascript(script, null);
+        Log.d("bridge: userscript Android Auto disuntik ke WebView");
+    }
+
+    private String readAsset(final String name) {
+        try (InputStream is = mIitc.getAssets().open(name)) {
+            final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            final byte[] chunk = new byte[8192];
+            int read;
+            while ((read = is.read(chunk)) > 0) {
+                buffer.write(chunk, 0, read);
+            }
+            return buffer.toString(StandardCharsets.UTF_8.name());
+        } catch (Throwable t) {
+            Log.w("bridge: gagal baca asset " + name + " -> " + t);
+            return null;
+        }
+    }
+
+    /**
+     * Dipanggil userscript bridge: app.sendPortals(json).
+     * Data cuma diterima kalau datang dari halaman intel map dan payload-nya valid.
+     */
+    @JavascriptInterface
+    public void sendPortals(final String json) {
+        final IITC_WebView webView = mIitc.getWebView();
+        final String url = webView != null ? webView.getUrl() : null;
+        final boolean accepted = PortalBridge.INSTANCE.accept(json, url);
+        if (!accepted) {
+            Log.d("bridge: payload portal ditolak -> " + PortalBridge.INSTANCE.getLastRejection().getValue());
+        }
     }
 
     // get layers and list them in a dialog

@@ -65,7 +65,10 @@ public class IITC_DebugHistoryTest {
         history.push("text3");
         history.push("text4");
         history.display();
-        assertEquals("text4 text3 \n", outContent.toString());
+        // CATATAN (fork IITC Auto): implementasinya memakai System.lineSeparator(),
+        // jadi di Windows akhir barisnya CR LF. Versi upstream menulis LF saja secara
+        // hardcoded sehingga test ini selalu gagal di Windows.
+        assertEquals("text4 text3 " + System.lineSeparator(), outContent.toString());
     }
 
     @Test

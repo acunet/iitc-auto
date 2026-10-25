@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+apply plugin: 'kotlin-android'
 
 final BUILD_DATE = new Date().format('yyyy.MM.dd-HH:mm')
 
@@ -86,6 +87,9 @@ android {
         sourceCompatibility = '1.8'
         targetCompatibility = '1.8'
     }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
     namespace 'org.exarhteam.iitc_mobile'
 
     applicationVariants.all { variant ->
@@ -108,7 +112,17 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
     implementation 'com.melnykov:floatingactionbutton:1.3.0'
     implementation 'androidx.documentfile:documentfile:1.1.0'
+
+    // Layer Android Auto (mode nyetir): template POI + StateFlow buat nyalurin data portal
+    // dari bridge userscript ke layar mobil. minSdk app-projected = 21, cocok dengan fork ini.
+    implementation 'androidx.car.app:app:1.7.0'
+    implementation 'androidx.car.app:app-projected:1.7.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+
     testImplementation 'junit:junit:4.12'
+    // org.json asli buat unit test: di android.jar kelas ini cuma stub yang melempar
+    // "not mocked", jadi parser nggak bisa diuji tanpa implementasi nyata.
+    testImplementation 'org.json:json:20240303'
 }
 
 task copyUserscripts(type: Copy) {

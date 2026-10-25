@@ -30,4 +30,6 @@ node_modules/
 
 # Asset hasil generate `python build.py mobile` (userscript + plugin IITC).
 # Jangan di-commit: 1,5 MB per build dan selalu bisa diregenerate.
-mobile/app/src/main/assets/
+# CATATAN: iitc-auto-bridge.js TIDAK diabaikan — itu kode kita sendiri, bukan hasil generate.
+mobile/app/src/main/assets/total-conversion-build.user.js
+mobile/app/src/main/assets/plugins/
