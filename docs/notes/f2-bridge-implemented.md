@@ -89,6 +89,9 @@ Catatan: handshake WebSocket DevTools **menolak** header `Origin` (403) — paka
 `websocket.create_connection(url, suppress_origin=True)`.
 
 Hasil `--probe` di HP nyata: `bridgeInstalled=true`, `nativeBridge=true`, `iitcLoaded=true`,
-`portalCount=224`, `hasMap=true` — artinya jalur JS sudah siap dan 224 portal nyata sudah dimuat.
-Yang belum dijalankan: `--trigger` + cek logcat `payload portal diterima` (HP sempat terkunci sehingga
-WebView disuspend dan CDP tidak merespons).
+`portalCount=237`, `hasMap=true`.
+
+**Status akhir: SUDAH diverifikasi dengan data portal nyata.** `--trigger` menghasilkan
+`bridge: payload portal diterima (237 portal, 26422 char)` di logcat (3 kiriman diterima, 0 ditolak).
+Bukti lengkap + potongan log ada di `docs/notes/f2-verified-log.txt`. Yang belum diuji tinggal
+apakah host Android Auto di head unit mobil mau menampilkan app sideload ini.

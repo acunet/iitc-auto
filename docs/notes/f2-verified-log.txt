@@ -1,0 +1,58 @@
+# Bukti verifikasi F2 dengan data portal nyata
+
+Perangkat: SM-F731B (Galaxy Z Flip 5), Android 16, app `org.exarhteam.iitc_mobile.debug` ("IITC Auto"),
+login Ingress dengan akun dummy.
+Tanggal: 2026-10-25
+
+## 1. Userscript kepasang otomatis oleh app
+
+```
+$ adb logcat -d -s iitcm | grep 'bridge:'
+bridge: userscript Android Auto disuntik ke WebView
+```
+
+## 2. State di dalam WebView (lewat Chrome DevTools Protocol)
+
+```
+$ python scripts/cdp-bridge-test.py --probe
+target: Ingress Intel Map | https://intel.ingress.com/?vp=m
+{
+  "url": "https://intel.ingress.com/?vp=m",
+  "bridgeInstalled": true,
+  "nativeBridge": true,
+  "iitcLoaded": true,
+  "portalCount": 237,
+  "hasMap": true,
+  "lastSentMs": 1792900510513
+}
+```
+
+## 3. Payload nyata diterima sisi native
+
+```
+$ python scripts/cdp-bridge-test.py --trigger
+dipicu; portal di window.portals: 237
+
+$ adb logcat -d -s iitcm | grep 'bridge:'
+bridge: payload portal diterima (237 portal, 26422 char)
+```
+
+Hitungan akhir pada buffer log: **payload diterima: 3, payload ditolak: 0**.
+
+Artinya rantai berikut terbukti hidup dengan data portal sungguhan:
+
+```
+WebView IITC (login Ingress, 237 portal di viewport)
+  → iitc-auto-bridge.js          (hook mapDataRefreshEnd + throttle)
+  → app.sendPortals(json)        (JavascriptInterface)
+  → IITC_JSInterface.sendPortals (validasi sumber: intel.ingress.com)
+  → PortalBridge.accept          (batas 256 KB, parser v1)
+  → PortalSnapshot               (237 Portal terparse, 0 ditolak)
+  → PortalMapScreen              (PlaceListMapTemplate — render sudah dibuktikan di emulator AAOS)
+```
+
+## Yang masih perlu mobil
+
+Host Android Auto di head unit (Jaecoo) harus mau menampilkan app sideload ini di launcher-nya,
+baik mode nyetir (template POI) maupun mode parked (IITC fullscreen). Semua bagian sebelum titik itu
+sudah terbukti: parsing, pemilihan portal, template, marker, dan now jalur datanya.
