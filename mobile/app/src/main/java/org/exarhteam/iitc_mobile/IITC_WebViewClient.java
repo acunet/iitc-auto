@@ -2,6 +2,8 @@ package org.exarhteam.iitc_mobile;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+
+import org.exarhteam.iitc_mobile.car.PortalBridge;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -103,6 +105,11 @@ public class IITC_WebViewClient extends WebViewClient {
 
     @Override
     public void onPageFinished(final WebView view, final String url) {
+        // URL di-cache di sini (UI thread) buat dipakai bridge Android Auto.
+        // PENTING: WebView.getUrl() TIDAK boleh dipanggil dari thread JS bridge — kalau dipanggil
+        // dari sana, panggilan app.sendPortals() deadlock (sudah kejadian saat pengujian).
+        PortalBridge.INSTANCE.setCurrentUrl(url);
+
         if (url.startsWith("https://intel.ingress.com")) {
             if (mIitcInjected)
                 return;

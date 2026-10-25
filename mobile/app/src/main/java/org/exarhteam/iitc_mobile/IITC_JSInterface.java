@@ -157,11 +157,14 @@ public class IITC_JSInterface {
     /**
      * Dipanggil userscript bridge: app.sendPortals(json).
      * Data cuma diterima kalau datang dari halaman intel map dan payload-nya valid.
+     *
+     * PENTING: jangan panggil API WebView apa pun di sini. Method ini jalan di thread JS bridge,
+     * dan memanggil WebView.getUrl() dari thread itu bikin deadlock (kejadian nyata saat uji).
+     * URL-nya di-cache oleh IITC_WebViewClient.onPageFinished di UI thread.
      */
     @JavascriptInterface
     public void sendPortals(final String json) {
-        final IITC_WebView webView = mIitc.getWebView();
-        final String url = webView != null ? webView.getUrl() : null;
+        final String url = PortalBridge.INSTANCE.getCurrentUrl();
         final boolean accepted = PortalBridge.INSTANCE.accept(json, url);
         if (accepted) {
             final org.exarhteam.iitc_mobile.car.PortalSnapshot snapshot =

@@ -19,6 +19,20 @@ object PortalBridge {
     /** Kiriman terakhir yang valid; null = belum ada data sama sekali. */
     val snapshot: StateFlow<PortalSnapshot?> = _snapshot.asStateFlow()
 
+    /**
+     * URL halaman WebView saat ini, di-cache dari UI thread (IITC_WebViewClient.onPageFinished).
+     * Sengaja disimpan, bukan dibaca dari WebView saat bridge dipanggil: WebView API tidak boleh
+     * dipanggil dari thread JS bridge (deadlock).
+     */
+    @Volatile
+    private var currentUrl: String? = null
+
+    fun setCurrentUrl(url: String?) {
+        currentUrl = url
+    }
+
+    fun getCurrentUrl(): String? = currentUrl
+
     private val _lastRejection = MutableStateFlow<String?>(null)
 
     /** Alasan penolakan terakhir (buat debug/status di layar). */
