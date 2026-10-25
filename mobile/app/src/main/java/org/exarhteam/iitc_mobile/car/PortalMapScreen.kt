@@ -9,6 +9,7 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarColor
+import androidx.car.app.model.CarIcon
 import androidx.car.app.model.CarLocation
 import androidx.car.app.model.CarText
 import androidx.car.app.model.Distance
@@ -21,10 +22,12 @@ import androidx.car.app.model.PlaceListMapTemplate
 import androidx.car.app.model.PlaceMarker
 import androidx.car.app.model.Row
 import androidx.car.app.model.Template
+import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import org.exarhteam.iitc_mobile.R
 
 /**
  * Portal map screen on Android Auto (driving mode).
@@ -118,15 +121,23 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
         else snapshot.portals.first().lat to snapshot.portals.first().lng
     }
 
-    private fun toPlace(portal: Portal): Place =
-        Place.Builder(CarLocation.create(portal.lat, portal.lng))
-            .setMarker(
-                PlaceMarker.Builder()
-                    .setColor(colorFor(portal.faction))
-                    .setLabel(portal.faction.code)
-                    .build()
+    private fun toPlace(portal: Portal): Place {
+        val marker = PlaceMarker.Builder().setColor(colorFor(portal.faction))
+        if (portal.faction == Faction.NEUTRAL || portal.faction == Faction.UNKNOWN) {
+            // Minimal marker. Without a label the host still draws a full balloon and puts the list
+            // index in it, so neutral portals get the smallest marker the API offers instead: a dot.
+            marker.setIcon(
+                CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_portal_neutral)).build(),
+                PlaceMarker.TYPE_ICON,
             )
+        } else {
+            // Faction portals keep the letter: colour + letter is what tells you whose area this is.
+            marker.setLabel(portal.faction.code)
+        }
+        return Place.Builder(CarLocation.create(portal.lat, portal.lng))
+            .setMarker(marker.build())
             .build()
+    }
 
     private fun colorFor(faction: Faction): CarColor = when (faction) {
         Faction.RESISTANCE -> CarColor.BLUE
