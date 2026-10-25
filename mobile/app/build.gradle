@@ -55,6 +55,24 @@ android {
             }
         }
     }
+    // Dua runtime Android for Cars butuh artefak + minSdk yang berbeda:
+    //  - projected  (Android Auto: HP di-mirror ke head unit) -> app-projected, minSdk 21 (warisan)
+    //  - automotive (AAOS: OS mobil terpasang di head unit)  -> app-automotive, minSdk 29,
+    //    dan butuh entry point CarAppActivity supaya car launcher membukanya sebagai car app.
+    // Menyatukan keduanya dalam satu varian bentrok di meta-data
+    // CarAppMetadataHolderService.CAR_HARDWARE_MANAGER (dua nilai berbeda dari dua library itu).
+    flavorDimensions 'runtime'
+    productFlavors {
+        projected {
+            dimension 'runtime'
+        }
+        automotive {
+            dimension 'runtime'
+            minSdk 29
+            applicationIdSuffix '.automotive'
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix ".debug"
@@ -114,9 +132,10 @@ dependencies {
     implementation 'androidx.documentfile:documentfile:1.1.0'
 
     // Layer Android Auto (mode nyetir): template POI + StateFlow buat nyalurin data portal
-    // dari bridge userscript ke layar mobil. minSdk app-projected = 21, cocok dengan fork ini.
+    // dari bridge userscript ke layar mobil. Dua artefak runtime dipisah per flavor.
     implementation 'androidx.car.app:app:1.7.0'
-    implementation 'androidx.car.app:app-projected:1.7.0'
+    projectedImplementation 'androidx.car.app:app-projected:1.7.0'
+    automotiveImplementation 'androidx.car.app:app-automotive:1.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 
     testImplementation 'junit:junit:4.12'

@@ -17,11 +17,13 @@ Socket devtools:   adb shell cat /proc/net/unix | grep webview_devtools_remote
 """
 import argparse
 import json
+import os
 import urllib.request
 
 import websocket
 
-DEVTOOLS = "http://localhost:9222/json/list"
+DEVTOOLS_PORT = int(os.environ.get("CDP_PORT", "9222"))
+DEVTOOLS = "http://localhost:%d/json/list" % DEVTOOLS_PORT
 
 PROBE_JS = """
 JSON.stringify({
@@ -102,12 +104,33 @@ def main():
     parser.add_argument("--trigger", action="store_true", help="paksa kirim pakai data portal nyata")
     parser.add_argument("--fake", action="store_true", help="suntik portal palsu lalu kirim (tanpa login)")
     parser.add_argument("--eval", dest="expr", help="jalankan ekspresi JS apa pun dan cetak hasilnya")
+    parser.add_argument("--dump-payload", metavar="FILE",
+                        help="simpan payload terakhir dari WebView (state.lastPayload) ke file")
+    parser.add_argument("--inject-payload", metavar="FILE",
+                        help="kirim isi file sebagai payload ke bridge native (app.sendPortals) — "
+                             "dipakai buat mendemokan data nyata dari HP lain, mis. di emulator")
     args = parser.parse_args()
 
     page = pick_page()
     print("target:", page.get("title"), "|", page.get("url"))
 
-    if args.expr:
+    if args.dump_payload:
+        payload = evaluate(page["webSocketDebuggerUrl"],
+                           "window.__iitcAutoBridge ? window.__iitcAutoBridge.state.lastPayload : null")
+        if not payload:
+            raise SystemExit("belum ada payload di WebView ini (biarkan peta IITC sempat memuat data dulu)")
+        with open(args.dump_payload, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+        print("payload tersimpan:", args.dump_payload, len(payload), "char")
+    elif args.inject_payload:
+        with open(args.inject_payload, encoding="utf-8") as fh:
+            payload = fh.read()
+        # json.dumps -> literal string JS yang aman (escaping lengkap)
+        expr = "(function(){ if (typeof app === 'undefined' || !app.sendPortals) return 'interface native tidak ada'; " \
+               "app.sendPortals(%s); return 'payload %d char dikirim ke native'; })()" % (
+                   json.dumps(payload), len(payload))
+        print(evaluate(page["webSocketDebuggerUrl"], expr))
+    elif args.expr:
         print(evaluate(page["webSocketDebuggerUrl"], args.expr))
     elif args.trigger:
         print(evaluate(page["webSocketDebuggerUrl"], TRIGGER_JS))

@@ -71,16 +71,22 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
         val rows = ItemList.Builder().apply {
             shown.forEach { portal ->
                 val distanceM = Geo.distanceMeters(ref.first, ref.second, portal.lat, portal.lng)
-                val title = SpannableString(portal.name)
-                title.setSpan(
+
+                // Nama portal jadi JUDUL (teks biasa), DistanceSpan ditempel di baris teks pertama.
+                // Sebelumnya span dipasang di judul, dan host menampilkan jaraknya sebagai judul —
+                // akibatnya nama portal hilang dari layar mobil (ketemu saat uji di emulator AAOS).
+                val distanceText = SpannableString("${distanceM.toInt()} m")
+                distanceText.setSpan(
                     DistanceSpan.create(Distance.create(distanceM, Distance.UNIT_METERS)),
                     0,
-                    title.length,
+                    distanceText.length,
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
                 )
+
                 addItem(
                     Row.Builder()
-                        .setTitle(CarText.create(title))
+                        .setTitle(portal.name)
+                        .addText(CarText.create(distanceText))
                         .addText(textFor(portal, isTarget = portal.guid in targets))
                         .setMetadata(Metadata.Builder().setPlace(toPlace(portal)).build())
                         .build()
@@ -129,7 +135,13 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
 
     private fun textFor(portal: Portal, isTarget: Boolean): String {
         val level = if (portal.level > 0) "L${portal.level}" else "L?"
-        val health = portal.health?.let { " · HP $it%" } ?: ""
+        // HP cuma relevan buat portal yang dimiliki faksi; portal netral selalu 0% dan itu cuma noise.
+        val hp = portal.health
+        val health = if (hp != null && hp > 0 && portal.faction != Faction.NEUTRAL && portal.faction != Faction.UNKNOWN) {
+            " · HP $hp%"
+        } else {
+            ""
+        }
         val mark = if (isTarget) " · TARGET" else ""
         return "$level · ${portal.faction.name.lowercase()}$health$mark"
     }
