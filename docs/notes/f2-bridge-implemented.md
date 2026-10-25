@@ -57,3 +57,38 @@ WebView IITC (halaman intel.ingress.com)
   `System.lineSeparator()` dengan `"\n"` hardcoded — sudah diperbaiki supaya lintas-platform.
 - `isTrustedSource` versi pertama terlalu longgar (`endsWith("ingress.com")` juga menerima
   `evil-ingress.com`) — ketemu lewat test, sudah diperketat ke `ingress.com` / `*.ingress.com`.
+
+## Verifikasi di HP nyata (2026-10-25) — dan satu bug deadlock
+
+Setelah HP kedua login pakai akun dummy, dua hal terbukti dan satu bug besar ketemu:
+
+**Terbukti:** userscript bridge beneran kepasang otomatis oleh app di HP nyata
+(`adb logcat -s iitcm | grep bridge:` → `bridge: userscript Android Auto disuntik ke WebView`).
+
+**Bug deadlock (sudah dibetulkan):** `app.sendPortals(json)` **nyangkut tanpa error** sehingga
+0 payload sampai ke native. Penyebabnya: `WebView.getUrl()` dipanggil **dari thread JS bridge**
+di `IITC_JSInterface.sendPortals()` — di Android, API WebView tidak boleh dipanggil dari thread itu,
+dan hasilnya deadlock (tanpa exception, jadi tidak ada jejak di logcat).
+Perbaikan: URL di-cache di UI thread (`IITC_WebViewClient.onPageFinished` →
+`PortalBridge.setCurrentUrl`) dan bridge hanya membaca cache tersebut. Pelajaran umum: **method
+`@JavascriptInterface` harus bebas dari API WebView/UI apa pun**; kalau butuh data dari UI thread,
+simpan dulu di field.
+
+**Alat verifikasi baru:** `scripts/cdp-bridge-test.py` — menyambung ke WebView lewat Chrome DevTools
+Protocol (WebView debugging memang aktif di IITC Mobile) supaya bisa memeriksa state tanpa melihat
+layar mobil:
+
+```bash
+adb -s <serial> forward tcp:9222 localabstract:webview_devtools_remote_$(adb shell pidof org.exarhteam.iitc_mobile.debug)
+python scripts/cdp-bridge-test.py --probe      # state bridge + jumlah portal di window.portals
+python scripts/cdp-bridge-test.py --trigger    # paksa kirim pakai data portal nyata
+python scripts/cdp-bridge-test.py --eval "<js>"  # ekspresi JS bebas
+```
+
+Catatan: handshake WebSocket DevTools **menolak** header `Origin` (403) — pakai
+`websocket.create_connection(url, suppress_origin=True)`.
+
+Hasil `--probe` di HP nyata: `bridgeInstalled=true`, `nativeBridge=true`, `iitcLoaded=true`,
+`portalCount=224`, `hasMap=true` — artinya jalur JS sudah siap dan 224 portal nyata sudah dimuat.
+Yang belum dijalankan: `--trigger` + cek logcat `payload portal diterima` (HP sempat terkunci sehingga
+WebView disuspend dan CDP tidak merespons).
