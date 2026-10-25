@@ -87,23 +87,36 @@ The upstream tree was imported as-is at commit `b017817df9d753195973ecbddd25a1d0
 - **Upstream licensing is preserved:** [`LICENSE`](LICENSE) (ISC — © 2018-2020 IITC-CE,
   © 2013-2018 IITC) and [`ATTRIBUTION.md`](ATTRIBUTION.md) (third-party components and plugins).
   Copyright notices are untouched.
+- **This fork stays open source.** Our additions (IITC Auto, © 2026 Acunet) are released under the
+  same ISC licence as upstream, and new files carry an `SPDX-License-Identifier: ISC` header. There
+  is no proprietary part, no open-core split and no separate commercial edition — fork it, change
+  it, redistribute it.
 - **Our changes are itemised** in [`MODIFICATIONS.md`](MODIFICATIONS.md), so it stays clear which
   code is upstream and which is IITC Auto.
 - **No endorsement is implied.** "IITC" and "Ingress" are used to indicate provenance, not to imply
   support from IITC-CE or Niantic. Rename it if you plan to distribute it widely.
+- **Full legal notice:** [`NOTICE.md`](NOTICE.md) — licence inventory, third-party components, and
+  the game/ToS position. Audit record: [`docs/notes/legal-compliance.md`](docs/notes/legal-compliance.md).
 - **The upstream README is kept** as `README-UPSTREAM.md`.
 
 ### Warnings you should read
 
-1. **IITC is considered a violation of the Ingress ToS.** Niantic states that all third-party
-   software violates the ToS; the risk (including account bans) is the user's. Do not post IITC
-   screenshots to official Ingress channels.
+1. **IITC is considered a violation of the Ingress ToS.** Niantic treats "accessing Ingress clients
+   or backends in an unauthorized manner ... through the use of third party software" as cheating,
+   and lists "using modified or unofficial software" among the reasons accounts get terminated
+   (<https://ingress.com/terms>, <https://support.ingress.com/hc/en-us/articles/41140395680795>,
+   <https://support.ingress.com/hc/en-us/articles/41140396093979>). IITC-CE says the same about
+   itself on <https://iitc.app/>: *"Any use is at your own risk."* Test with a throwaway account,
+   never one you care about, and do not post IITC screenshots to official Ingress channels.
 2. **Sideload only.** This app cannot ship on Google Play: the parked "browser" category is not
    supported on Android Auto, and a POI template would need manual review against a
    "meaningful functionality relevant to driving" requirement.
 3. **Parked mode works only while the car is stationary** — Android Auto stops the app as soon as the
    car moves. That is a Google safety rule, not a design choice here.
 4. Do not install this on a production head unit or on a vehicle you do not own.
+5. **Keep it non-commercial.** Niantic's terms grant no rights for business or commercial use of the
+   Services. This project is not sold, not ad-supported and not offered as a paid service; a fork
+   that monetises it does so without this project's blessing.
 
 ## Contributing
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/capture-window.ps1 — screenshot one specific window (default: the Desktop Head Unit window).
 # Used to capture the virtual head unit view without having to shoot the whole desktop.
 #   powershell -ExecutionPolicy Bypass -File scripts/capture-window.ps1 -ProcessName desktop-head-unit -Path C:/.../dhu.png

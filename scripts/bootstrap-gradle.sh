@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/bootstrap-gradle.sh
 # This machine has no `gradle` on PATH. Download the Gradle 8.13 distribution once
 # (outside the repo) so a wrapper can be generated and then committed.

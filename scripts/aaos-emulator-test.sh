@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/aaos-emulator-test.sh — virtual head unit (Android Automotive OS) without a phone/car.
 #
 # Flow: make sure the image exists -> create the AVD (via .bat because of ';') -> boot the emulator ->

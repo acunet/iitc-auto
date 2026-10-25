@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 """
 cdp-bridge-test.py — verify the IITC Auto bridge data path WITHOUT having to watch the car screen.
 

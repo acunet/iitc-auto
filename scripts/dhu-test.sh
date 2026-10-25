@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/dhu-test.sh — test the Android Auto app without a car, using the Desktop Head Unit (DHU).
 #
 # Flow: install the APK -> make sure the phone is authorized -> open a tunnel to the AA

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/import-upstream.sh — import the IITC-CE upstream tree into this repo (fork by content).
 #
 # Note: `rsync` is not available on this git-bash host, so tar is used instead.

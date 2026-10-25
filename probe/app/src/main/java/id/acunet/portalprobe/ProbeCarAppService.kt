@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: ISC
+// Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
+
 package id.acunet.portalprobe
 
 import android.content.Intent

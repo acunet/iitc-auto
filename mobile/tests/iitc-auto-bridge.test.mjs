@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: ISC
+// Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
+
 /*
  * Bridge logic tests (node --test friendly, run: node mobile/tests/iitc-auto-bridge.test.mjs)
  * The logic is taken from the real userscript through a vm sandbox, not a copy — so the tests

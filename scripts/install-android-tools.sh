@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/install-android-tools.sh
 # Install cmdline-tools (sdkmanager) + Desktop Head Unit into the existing Android SDK.
 set -e

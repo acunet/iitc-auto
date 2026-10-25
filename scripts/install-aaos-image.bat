@@ -1,4 +1,6 @@
 @echo off
+REM SPDX-License-Identifier: ISC
+REM Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 REM scripts/install-aaos-image.bat
 REM Why a separate .bat file: cmd.exe treats ';' as an argument separator, so calling
 REM sdkmanager directly from git-bash splits the package name

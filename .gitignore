@@ -29,7 +29,12 @@ desktop.ini
 node_modules/
 
 # Generated assets from `python build.py mobile` (IITC userscript + plugins).
-# Do not commit: 1.5 MB per build and always regenerable.
-# NOTE: iitc-auto-bridge.js is NOT ignored — it is our own code, not generated output.
+# Never commit: ~1.5 MB per build and always regenerable.
+# Our own bridge userscript sits in the same folder and IS committed; mobile/.gitignore
+# spells the generated paths out one by one so it is not swallowed (see the note there).
 mobile/app/src/main/assets/total-conversion-build.user.js
 mobile/app/src/main/assets/plugins/
+
+# Python bytecode (never commit compiled build scripts)
+__pycache__/
+*.pyc

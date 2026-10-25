@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: ISC
+# Copyright (c) 2026 Acunet — IITC Auto, a fork of IITC-CE (see NOTICE.md)
 # scripts/capture-screen.ps1 — screenshot the entire screen to a PNG file.
 # Used to grab an image of the Desktop Head Unit window (virtual head unit) on the PC.
 #   powershell -ExecutionPolicy Bypass -File scripts/capture-screen.ps1 -Path C:/Users/mansu/dev/tools/shot.png
