@@ -21,16 +21,38 @@ Result: `mobile/app/src/main/assets/total-conversion-build.user.js` (1.5 MB) + a
 
 `assets/` and `node_modules/` have been added to `.gitignore` (both are generated output).
 
-## 2. DHU (virtual head unit) is DEAD for the user's phone's Android Auto version
+## 2. DHU (virtual head unit) — the server exists, but projection never starts
 
-Android Auto **17.8.663884** on the user's phone **no longer has a "head unit server"**: string
-searches in the APK's `resources.arsc` and `classes*.dex` return 0 matches for `head unit server`.
-Without that server, DHU 2.0 can't connect over the ADB tunnel (`Waiting for phone...` in the DHU
-window), and USB/AOA mode (`-u`) also fails on this machine (`Device 'MSI MYSTIC LIGHT' does not support AOAP`,
-`Couldn't find/access compatible USB device`).
+**Corrected on 2026-10-25.** An earlier version of this note claimed the phone's Android Auto
+"no longer has a head unit server" because string searches over `resources.arsc` and `classes*.dex`
+returned nothing. **That was wrong**, and the search itself was broken: the `strings` binary is not
+available in this git-bash shell, so the greps matched nothing at all — including controls that do
+exist. Re-checked properly with `aapt2 dump resources` on AA 17.9's `split_config.en.apk`:
 
-Consequence: **the Android Auto projection test can only be done in the car** (or by downgrading AA —
-but older Android Auto versions don't support parked apps, so the trade-off isn't worth it).
+```
+resource ...string/menu_action_developer_head_unit_network_server
+resource ...string/developer_head_unit_server_notification_title   ("Starting head unit server…")
+resource ...string/developer_head_unit_server_notification_stop
+string "Unknown sources"
+```
+
+The toggle is in the AA settings overflow menu, the server starts, listens on `tcp6 [::]:5277`, the
+ADB tunnel works, and DHU completes the TLS handshake with the phone
+(`Phone reported protocol version 1.7`, `SSL negotiation finished successfully`, `Verify returned: ok`).
+
+What still fails is the step after that: **Android Auto never begins the projection session** — the
+DHU window stays on `Waiting for phone...`, and on one attempt the phone dropped the transport right
+after TLS (`Failed to read from transport - disconnect`). No protocol or version rejection appears in
+logcat, and the car-setup duplex activity (`com.google.android.gms.carsetup.START_DUPLEX`) does not
+render a wizard. DHU's last release is from 2022 (protocol 1.7) while the phone runs AA 17.9, so a
+version gap is the likely cause — recorded as **unconfirmed**, not proven.
+
+Full evidence, commands and the two script bugs found along the way: `docs/notes/dhu-attempt.md`.
+
+Consequence: **the projection test can still only be done in the car.** (Downgrading AA is the other
+route, but older AA versions do not support parked apps, so that trade-off is not worth it. A
+third-party wireless head-unit emulator that speaks the current protocol would be the remaining
+option if this path must be pushed further.)
 
 ## 3. Parked app path: PROVEN up to the point where the intel page loads
 
