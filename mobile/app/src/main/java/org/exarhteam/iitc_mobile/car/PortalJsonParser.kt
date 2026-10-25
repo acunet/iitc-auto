@@ -74,7 +74,7 @@ object PortalJsonParser {
 
         return Portal(
             guid = guid,
-            name = obj.optString("n", "(unnamed)"),
+            name = obj.optString("n", "").ifBlank { UNKNOWN_PORTAL_NAME },
             lat = lat,
             lng = lng,
             faction = Faction.fromCode(obj.optString("t", "")),

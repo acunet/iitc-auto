@@ -155,6 +155,19 @@ class PortalBridgeTest {
         assertNull(PortalBridge.lastRejection.value)
     }
 
+    @Test
+    fun `names, level tags and faction tags fall back cleanly while IITC resolves data`() {
+        assertEquals("RES", Faction.RESISTANCE.tag)
+        assertEquals("", Portal("g", "x", -6.2, 106.8, Faction.NEUTRAL, 0, null).levelTag)
+
+        val unresolved = PortalJsonParser.parse(
+            """{"v":1,"portals":[{"g":"a","lat":-6.2,"lng":106.8,"t":"E","l":7}]}"""
+        ) as ParseResult.Success
+        val portal = unresolved.snapshot.portals.single()
+        assertEquals(UNKNOWN_PORTAL_NAME, portal.name)
+        assertEquals("L7 ", portal.levelTag)
+    }
+
     private fun portal(guid: String, lat: Double, lng: Double) = Portal(
         guid = guid,
         name = guid,

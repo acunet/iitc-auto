@@ -60,21 +60,27 @@ rules are now explicit in `PortalMapScreen.toPlace`:
 
 | Faction | Marker | Status |
 |---|---|---|
-| Enlightened | green balloon, white `E` | verified: a cluster of 5 Enlightened portals, all green with `E` |
-| Resistance | blue balloon, white `R` | verified: 4 blue `R` markers in a Resistance cluster |
-| Machina | red balloon, white `M` | same code path (`CarColor.RED`), no screenshot of a red cluster yet |
-| Neutral / unknown | white balloon with a small dark dot, no letter | a letter — or the host's fallback row index — is as loud as a faction pin |
+| Enlightened | green balloon, white **level digit** (`E` while the level is unresolved) | verified: green balloons with `8`, `2`, `E` on an Enlightened cluster |
+| Resistance | blue balloon, same rule | verified |
+| Machina | red balloon, same rule | same code path (`CarColor.RED`), no screenshot of a red cluster yet |
+| Neutral / unknown | white balloon, same rule | verified: white balloons with `1` on a neutral cluster |
 
-What the host decides, learned the hard way:
+What the host decides, learned the hard way (each point cost a rebuild):
 
 - Every marker attached to a list row is drawn as a **full balloon**, and its size is not ours to set.
-  With a label the host puts the label in the balloon; without one it puts the row index; with an
-  icon it puts the icon.
-- `PlaceMarker.TYPE_IMAGE` — tried as a route to a bare dot — makes the AAOS host throw and the car
-  app disappears from the driving screen. The neutral marker is therefore back on `TYPE_ICON`.
-- So the smallest a neutral portal can look here is a dot inside a balloon. If that is still too
-  loud, the next step is to drop neutral rows from the map metadata and keep them in the list only:
-  one line in `toPlace`.
+- **Colour + label is the only combination that works.** With `setIcon` the host draws a *white*
+  balloon and masks our bitmap down to a black silhouette — the faction colour and the level both
+  disappear. A bitmap badge (`PortalBadge.kt`) was written, tested and then deleted for this reason.
+- `PlaceMarker.TYPE_IMAGE` makes the AAOS host throw and the car app disappears from the screen.
+- **A row cannot have both a marker and an image:**
+  `java.lang.IllegalArgumentException: Rows can't have both a marker and an image`. So the row icon
+  from the "coloured dot in the list" idea is impossible while the map marker is kept — and the
+  marker is the part that makes the map readable, so the marker wins and the list stays text-only.
+- `CarColor.createCustom()` exists but is host-optional and is ignored once a label is set; the host
+  paints its own palette (blue/green/red), so Ingress' exact hex values are not reachable on AAOS.
+- The label is one character in practice: a level digit, or the faction letter as fallback.
+- Subtitle text that works: `L8 ENL · 98.2 m` (the `DistanceSpan` is swapped for the host's own
+  formatting), with `HP 100%` / `TARGET` only on a second line when there is something to say.
 
 Evidence: `img/aaos-markers-enlightened.png`, `img/aaos-markers-resistance.png` and
 `img/aaos-markers-neutral.png`. Each one was made from the real payload of the author's account with

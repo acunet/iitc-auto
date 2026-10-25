@@ -73,7 +73,7 @@
 
         return {
             g: String(guid),
-            n: (data && data.title) ? String(data.title) : '(unnamed)',
+            n: (data && data.title) ? String(data.title) : '',
             lat: lat,
             lng: lng,
             t: factionCode(data && data.team),

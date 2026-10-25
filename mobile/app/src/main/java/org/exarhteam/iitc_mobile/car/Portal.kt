@@ -8,13 +8,16 @@ package org.exarhteam.iitc_mobile.car
  * Every class in this file is pure (no Android dependency) so it can be unit tested on the JVM.
  */
 
-/** Portal faction; the raw code comes from IITC data ('R'/'E'/'M'/'N'). */
-enum class Faction(val code: String) {
-    RESISTANCE("R"),
-    ENLIGHTENED("E"),
-    MACHINA("M"),
-    NEUTRAL("N"),
-    UNKNOWN("?");
+/**
+ * Portal faction. [code] is the raw IITC value ('R'/'E'/'M'/'N'); [tag] is the short label the
+ * car screen shows ("RES", "ENL", ...).
+ */
+enum class Faction(val code: String, val tag: String) {
+    RESISTANCE("R", "RES"),
+    ENLIGHTENED("E", "ENL"),
+    MACHINA("M", "MAC"),
+    NEUTRAL("N", "NEU"),
+    UNKNOWN("?", "UNK");
 
     companion object {
         fun fromCode(code: String?): Faction = when (code?.trim()?.uppercase()) {
@@ -50,6 +53,9 @@ data class BoundingBox(
     }
 }
 
+/** Shown when IITC has not resolved a portal name yet, which is normal right after a map move. */
+const val UNKNOWN_PORTAL_NAME = "Unknown Portal"
+
 data class Portal(
     val guid: String,
     val name: String,
@@ -58,7 +64,10 @@ data class Portal(
     val faction: Faction,
     val level: Int,
     val health: Int?,
-)
+) {
+    /** "L7 " once IITC has reported a level, empty while it has not. */
+    val levelTag: String get() = if (level > 0) "L$level " else ""
+}
 
 /**
  * A single data push from the IITC WebView.

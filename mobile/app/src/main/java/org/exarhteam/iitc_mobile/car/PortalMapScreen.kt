@@ -9,7 +9,6 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.CarColor
-import androidx.car.app.model.CarIcon
 import androidx.car.app.model.CarLocation
 import androidx.car.app.model.CarText
 import androidx.car.app.model.Distance
@@ -22,12 +21,11 @@ import androidx.car.app.model.PlaceListMapTemplate
 import androidx.car.app.model.PlaceMarker
 import androidx.car.app.model.Row
 import androidx.car.app.model.Template
-import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
-import org.exarhteam.iitc_mobile.R
+import java.util.Locale
 
 /**
  * Portal map screen on Android Auto (driving mode).
@@ -78,22 +76,15 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
             shown.forEach { portal ->
                 val distanceM = Geo.distanceMeters(ref.first, ref.second, portal.lat, portal.lng)
 
-                // The portal name is the TITLE (plain text) and the DistanceSpan goes on the first text row.
-                // Previously the span was set on the title and the host rendered the distance as the title —
-                // as a result the portal name vanished from the car screen (found while testing on the AAOS emulator).
-                val distanceText = SpannableString("${distanceM.toInt()} m")
-                distanceText.setSpan(
-                    DistanceSpan.create(Distance.create(distanceM, Distance.UNIT_METERS)),
-                    0,
-                    distanceText.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-
+                // Title = portal name; the distance span lives in the subtitle, never in the title (the
+                // host replaces the span with its own formatted distance and would eat the name).
+                // No setImage() here: the host refuses "Rows can't have both a marker and an image",
+                // and the marker is what makes the map readable — the badge rides inside it instead.
                 addItem(
                     Row.Builder()
                         .setTitle(portal.name)
-                        .addText(CarText.create(distanceText))
-                        .addText(textFor(portal, isTarget = portal.guid in targets))
+                        .addText(subtitleFor(portal, distanceM))
+                        .apply { extraLine(portal, isTarget = portal.guid in targets)?.let { addText(it) } }
                         .setMetadata(Metadata.Builder().setPlace(toPlace(portal)).build())
                         .build()
                 )
@@ -121,23 +112,20 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
         else snapshot.portals.first().lat to snapshot.portals.first().lng
     }
 
-    private fun toPlace(portal: Portal): Place {
-        val marker = PlaceMarker.Builder().setColor(colorFor(portal.faction))
-        if (portal.faction == Faction.NEUTRAL || portal.faction == Faction.UNKNOWN) {
-            // Minimal marker. Without a label the host still draws a full balloon and puts the list
-            // index in it, so neutral portals get the smallest marker the API offers instead: a dot.
-            marker.setIcon(
-                CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_portal_neutral)).build(),
-                PlaceMarker.TYPE_ICON,
+    private fun toPlace(portal: Portal): Place =
+        Place.Builder(CarLocation.create(portal.lat, portal.lng))
+            .setMarker(
+                PlaceMarker.Builder()
+                    // Colour + LABEL, never an icon: with an icon the host draws a plain white balloon
+                    // and masks the bitmap to a black silhouette, so both the faction colour and the
+                    // level would be lost (verified on the AAOS emulator).
+                    .setColor(colorFor(portal.faction))
+                    // Level inside the balloon — the number an agent actually reads. Falls back to the
+                    // faction letter while IITC has not resolved the level yet.
+                    .setLabel(if (portal.level > 0) portal.level.toString() else portal.faction.code)
+                    .build()
             )
-        } else {
-            // Faction portals keep the letter: colour + letter is what tells you whose area this is.
-            marker.setLabel(portal.faction.code)
-        }
-        return Place.Builder(CarLocation.create(portal.lat, portal.lng))
-            .setMarker(marker.build())
             .build()
-    }
 
     private fun colorFor(faction: Faction): CarColor = when (faction) {
         Faction.RESISTANCE -> CarColor.BLUE
@@ -147,18 +135,35 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
         Faction.UNKNOWN -> CarColor.DEFAULT
     }
 
-    private fun textFor(portal: Portal, isTarget: Boolean): String {
-        val level = if (portal.level > 0) "L${portal.level}" else "L?"
-        // HP is only relevant for portals owned by a faction; neutral portals are always 0% and that is just noise.
-        val hp = portal.health
-        val health = if (hp != null && hp > 0 && portal.faction != Faction.NEUTRAL && portal.faction != Faction.UNKNOWN) {
-            " · HP $hp%"
-        } else {
-            ""
-        }
-        val mark = if (isTarget) " · TARGET" else ""
-        return "$level · ${portal.faction.name.lowercase()}$health$mark"
+    /** "L7 RES · 95 m" — the host swaps the distance span for its own localised rendering. */
+    private fun subtitleFor(portal: Portal, distanceM: Double): CarText {
+        val prefix = "${portal.levelTag}${portal.faction.tag} · "
+        val text = SpannableString(prefix + formatDistance(distanceM))
+        text.setSpan(
+            DistanceSpan.create(Distance.create(distanceM, Distance.UNIT_METERS)),
+            prefix.length,
+            text.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        return CarText.create(text)
     }
+
+    /**
+     * Second text line, only when there is something worth saying: neutral portals have neither HP
+     * nor a target flag, so their rows stay two lines instead of three.
+     */
+    private fun extraLine(portal: Portal, isTarget: Boolean): String? {
+        val parts = ArrayList<String>(2)
+        val hp = portal.health
+        if (hp != null && hp > 0 && portal.faction != Faction.NEUTRAL && portal.faction != Faction.UNKNOWN) {
+            parts.add("HP $hp%")
+        }
+        if (isTarget) parts.add("TARGET")
+        return parts.joinToString(" · ").ifEmpty { null }
+    }
+
+    private fun formatDistance(meters: Double): String =
+        if (meters < 1000) "${meters.toInt()} m" else String.format(Locale.US, "%.1f km", meters / 1000)
 
     private fun titleFor(snapshot: PortalSnapshot): String =
         if (snapshot.isStale()) {
