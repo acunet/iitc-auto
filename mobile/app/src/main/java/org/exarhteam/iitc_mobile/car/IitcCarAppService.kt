@@ -32,7 +32,8 @@ class IitcCarAppService : CarAppService() {
     }
 
     companion object {
-        private const val TAG = "iitc-auto-car"
+        /** Shared with PortalSession below, hence not private. */
+        const val TAG = "iitc-auto-car"
     }
 }
 
