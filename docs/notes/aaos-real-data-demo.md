@@ -49,3 +49,6 @@ Evidence: `docs/notes/img/aaos-real-portals-v1.png` and `aaos-real-portals-v2.pn
 
 
 > Note: when these lines were captured the app still logged them in Indonesian; the code logs them in English now.
+
+
+After the English pass, the same screen was re-verified with the same real payload: English UI, screenshot `docs/notes/img/aaos-real-portals-en.png`.
