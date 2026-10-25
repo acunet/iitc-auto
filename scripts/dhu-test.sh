@@ -16,11 +16,9 @@ source "$(dirname "$0")/env.sh" >/dev/null
 
 REPO="/c/Users/mansu/dev/iitc-auto"
 DHU="/c/Users/mansu/AppData/Local/Android/Sdk/extras/google/auto/desktop-head-unit.exe"
-APK_PROBE="$REPO/probe/app/build/outputs/apk/debug/app-debug.apk"
-APK_IITC="$REPO/mobile/app/build/outputs/apk/debug/app-debug.apk"
-# adb is a native tool -> it needs a Windows path
+# Native tools (adb, DHU) need Windows paths, not MSYS ones.
+APK_IITC_WIN="C:/Users/mansu/dev/iitc-auto/mobile/app/build/outputs/apk/projected/debug/app-projected-debug.apk"
 APK_PROBE_WIN="C:/Users/mansu/dev/iitc-auto/probe/app/build/outputs/apk/debug/app-debug.apk"
-APK_IITC_WIN="C:/Users/mansu/dev/iitc-auto/mobile/app/build/outputs/apk/debug/app-debug.apk"
 
 D=$(adb devices | awk 'NR>1 && $2=="device" {print $1}' | head -1)
 if [ -z "$D" ]; then
@@ -32,9 +30,13 @@ if [ -z "$D" ]; then
 fi
 echo "phone: $D ($(adb -s "$D" shell getprop ro.product.model | tr -d '\r'))"
 
-echo "== installing probe + the IITC Mobile fork =="
-adb -s "$D" install -r "$APK_PROBE_WIN"
+echo "== installing the projected (Android Auto) APK =="
 adb -s "$D" install -r "$APK_IITC_WIN"
+# The probe is an optional control app: it answers "does this head unit show sideloaded apps
+# at all?" without any of our code being involved.
+if [ -f "$REPO/probe/app/build/outputs/apk/debug/app-debug.apk" ]; then
+  adb -s "$D" install -r "$APK_PROBE_WIN"
+fi
 
 echo "== checking Android Auto =="
 adb -s "$D" shell pm list packages | grep -i gearhead || echo "WARNING: Android Auto is not visible on this phone"
@@ -43,6 +45,10 @@ echo "== opening the tunnel to the head unit server =="
 adb -s "$D" forward tcp:5277 tcp:5277
 
 echo "== starting DHU (virtual head unit window) =="
-echo "   In that window: look for 'Portal Probe' in the Android Auto launcher."
-echo "   If it does not appear: Customize launcher. Quitting DHU = close the window / Ctrl+C."
-"$DHU"
+echo "   In that window: look for 'IITC Auto' in the Android Auto launcher."
+echo "   If it does not appear: Customize launcher, and check 'Unknown sources' on the phone."
+echo "   Evidence without eyes on the screen:"
+echo "     powershell -ExecutionPolicy Bypass -File scripts/capture-window.ps1 -ProcessName desktop-head-unit -Path C:/Users/mansu/dev/tools/dhu.png"
+# -a 5277 forces the ADB transport. Bare DHU tries USB (AOA), which needs a driver and fails
+# with "Couldn't find/access compatible USB device" — that is what happened on the 2026-10-24 run.
+"$DHU" -a 5277
