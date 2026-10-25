@@ -1,0 +1,59 @@
+# F2 — bridge portal + layar Android Auto: sudah diimplementasikan
+
+Tanggal: 2026-10-25
+Status: **kode selesai, test hijau, APK terbangun. Belum diuji end-to-end dengan data portal nyata**
+(butuh HP login Ingress + mobil, atau minimal HP tercolok supaya bisa dicek log injeksinya).
+
+## Yang dibangun
+
+Alur datanya in-process, satu APK, tanpa file/IPC:
+
+```
+WebView IITC (halaman intel.ingress.com)
+   └─ userscript iitc-auto-bridge.js  (disuntik otomatis oleh app setelah IITC boot)
+        └─ app.sendPortals(json)      (JavascriptInterface bernama "app")
+             └─ IITC_JSInterface.sendPortals()   → validasi sumber + ukuran
+                  └─ PortalBridge (StateFlow)    → parser + snapshot
+                       └─ IitcCarAppService / PortalMapScreen
+                            └─ PlaceListMapTemplate + marker (warna faksi) + DistanceSpan
+```
+
+| File | Perannya |
+|---|---|
+| `car/Portal.kt` | model `Portal`, `Faction`, `BoundingBox`, `PortalSnapshot` (+ logika "basi" 120 detik) |
+| `car/PortalJsonParser.kt` | parser payload v1 + semua gerbang validasi (versi, ukuran, portal rusak dibuang) |
+| `car/Geo.kt` | haversine + `selectPortalsForDisplay` (target ops selalu ikut, sisanya terdekat) |
+| `car/PortalBridge.kt` | titik temu WebView ↔ mobil; `isTrustedSource` cuma terima `ingress.com`/subdomain |
+| `car/OpsTargetStore.kt` | daftar guid target ops di SharedPreferences |
+| `car/PortalMapScreen.kt` | template `PlaceListMapTemplate`: marker + DistanceSpan + label TARGET + indikator data basi |
+| `car/IitcCarAppService.kt` | `CarAppService` kategori POI + `Session` |
+| `assets/iitc-auto-bridge.js` | userscript: hook `mapDataRefreshEnd`, throttle 15 s, only-if-changed, maks 300 portal |
+| `IITC_JSInterface.java` | `sendPortals()` + `injectAutoBridge()` (suntik asset saat `bootFinished`) |
+
+## Bukti yang sudah ada
+
+- **13 test JVM hijau** (`mobile/app/src/test/.../car/PortalBridgeTest.kt`): parsing, validasi versi/ukuran,
+  portal rusak, penjepitan level, staleness, pemilihan target, haversine, penolakan sumber asing.
+- **8 test JS hijau** (`node mobile/tests/iitc-auto-bridge.test.mjs`), logika diambil dari file userscript
+  asli lewat sandbox `vm` — bukan salinan.
+- APK `app-debug.apk` terverifikasi isinya: `IitcCarAppService`, aksi `CarAppService`, kategori
+  `androidx.car.app.category.POI`, izin `MAP_TEMPLATES`, meta-data `minCarApiLevel`, kategori
+  `CAR_LAUNCHER` (parked), dan label aplikasi **IITC Auto**.
+- Render `PlaceListMapTemplate` + marker faksi + distance span sudah terbukti sebelumnya di emulator AAOS
+  (`docs/notes/img/aaos-probe-render.png`).
+
+## Yang belum diverifikasi (dan harus lewat HP/mobil)
+
+1. Injeksi userscript jalan di app sungguhan → cek `adb logcat | grep "bridge: userscript Android Auto"`.
+2. Bentuk data `window.portals` nyata sesuai dugaan (bridge sudah toleran: `latE6/lngE6`, `lat/lng`,
+   atau `layer.getLatLng()`; faksi angka maupun huruf).
+3. Host Android Auto menampilkan app ini di launcher + templatenya jalan saat nyetir.
+
+## Catatan teknis yang ketemu di fase ini
+
+- Nama JavascriptInterface di fork ini **`app`**, bukan `android` (dokumentasi lama IITC menyebut `android`).
+- `org.json` di unit test Android cuma stub ("not mocked") → ditambah `testImplementation 'org.json:json:...'`.
+- Test bawaan upstream `IITC_DebugHistoryTest.display` selalu gagal di Windows karena membandingkan
+  `System.lineSeparator()` dengan `"\n"` hardcoded — sudah diperbaiki supaya lintas-platform.
+- `isTrustedSource` versi pertama terlalu longgar (`endsWith("ingress.com")` juga menerima
+  `evil-ingress.com`) — ketemu lewat test, sudah diperketat ke `ingress.com` / `*.ingress.com`.

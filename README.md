@@ -29,8 +29,14 @@ cd probe && ./gradlew assembleDebug
 
 ## Status
 
-Fase **F0a**: probe app Android Auto (kategori POI) buat ngecek head unit Jaecoo mau
-nampilin app sideload atau nggak. Belum ada fitur IITC-nya.
+**F2 selesai** (kode + test hijau): bridge data portal dari WebView IITC ke layar Android Auto,
+plus layar peta marker (`PlaceListMapTemplate`). Nama app: **IITC Auto**.
+
+- 13 test JVM + 8 test JS hijau → `./gradlew :app:testDebugUnitTest` dan `node mobile/tests/iitc-auto-bridge.test.mjs`
+- Dua mode: **nyetir** = peta marker (template POI), **berhenti** = IITC fullscreen (parked app)
+- Belum diuji end-to-end dengan data portal nyata di mobil → `docs/notes/f2-bridge-implemented.md`
+- Catatan penting: build wajib `npm install && python build.py mobile` dulu (asset userscript IITC
+  bukan hasil Gradle) → `docs/notes/iitc-on-car-screen.md`
 
 ## Peringatan
 
