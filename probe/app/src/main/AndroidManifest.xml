@@ -2,15 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Kategori POI: hanya boleh minta MAP_TEMPLATES.
-      JANGAN tambah NAVIGATION_TEMPLATES / ACCESS_SURFACE — itu kategori Navigation,
-      yang punya syarat turn-by-turn (NF-1) yang tidak bisa dipenuhi app peta portal.
+      POI category: only MAP_TEMPLATES may be requested.
+      Do NOT add NAVIGATION_TEMPLATES / ACCESS_SURFACE — those belong to the Navigation
+      category, whose turn-by-turn requirement (NF-1) a portal map app cannot satisfy.
     -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
 
-    <!-- setCurrentLocationEnabled(true) di template menuntut izin lokasi ini, kalau tidak
-         host melempar "MISSING_PERMISSION: The car app does not have the required location
-         permission(s)" dan proses app-nya mati. Perlu juga diminta saat runtime. -->
+    <!-- setCurrentLocationEnabled(true) in the template requires these location permissions;
+         without them the host throws "MISSING_PERMISSION: The car app does not have the required
+         location permission(s)" and kills the app process. They also have to be requested at runtime. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
@@ -25,25 +25,25 @@
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
-        <!-- WAJIB untuk host templated (AAOS): tanpa ini host menolak app dengan
+        <!-- REQUIRED for the templated host (AAOS): without this the host rejects the app with
              "Min API level not declared in manifest (androidx.car.app.minCarApiLevel)".
-             Nilai = level Car App API terendah yang benar-benar dipakai app.
-             1 = cukup untuk PlaceListMapTemplate. Naikkan ke 7 kalau nanti pakai
-             MapWithContentTemplate (surface). -->
+             The value is the lowest Car App API level the app actually uses.
+             1 = enough for PlaceListMapTemplate. Raise it to 7 if MapWithContentTemplate
+             (a surface) is used later. -->
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
 
-        <!-- CATATAN GATE 0a (AAOS): kalau activity ini punya intent-filter LAUNCHER,
-             car launcher AAOS memperlakukan app sebagai app biasa dan bukan sebagai
-             templated car app, jadi CarAppService-nya nggak pernah dibuka host.
-             Buat tes template di AAOS, filter LAUNCHER-nya dilepas. -->
+        <!-- GATE 0a NOTE (AAOS): if this activity carries a LAUNCHER intent-filter, the AAOS
+             car launcher treats the app as a regular app rather than a templated car app,
+             so the host never opens its CarAppService. For template testing on AAOS the
+             LAUNCHER filter was removed. -->
         <activity
             android:name=".MainActivity"
             android:exported="false" />
 
-        <!-- Entry point CarAppActivity (khusus flavor automotive/AAOS) ada di
-             app/src/automotive/AndroidManifest.xml — di flavor projected nggak dipakai. -->
+        <!-- The CarAppActivity entry point (automotive/AAOS flavour only) lives in
+             app/src/automotive/AndroidManifest.xml — the projected flavour does not use it. -->
 
         <service
             android:name=".ProbeCarAppService"

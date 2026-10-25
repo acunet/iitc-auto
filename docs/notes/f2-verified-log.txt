@@ -1,17 +1,17 @@
-# Bukti verifikasi F2 dengan data portal nyata
+# Proof of F2 verification with real portal data
 
-Perangkat: SM-F731B (Galaxy Z Flip 5), Android 16, app `org.exarhteam.iitc_mobile.debug` ("IITC Auto"),
-login Ingress dengan akun dummy.
-Tanggal: 2026-10-25
+Device: SM-F731B (Galaxy Z Flip 5), Android 16, app `org.exarhteam.iitc_mobile.debug` ("IITC Auto"),
+logged into Ingress with a dummy account.
+Date: 2026-10-25
 
-## 1. Userscript kepasang otomatis oleh app
+## 1. Userscript installed automatically by the app
 
 ```
 $ adb logcat -d -s iitcm | grep 'bridge:'
 bridge: userscript Android Auto disuntik ke WebView
 ```
 
-## 2. State di dalam WebView (lewat Chrome DevTools Protocol)
+## 2. State inside the WebView (via Chrome DevTools Protocol)
 
 ```
 $ python scripts/cdp-bridge-test.py --probe
@@ -27,7 +27,7 @@ target: Ingress Intel Map | https://intel.ingress.com/?vp=m
 }
 ```
 
-## 3. Payload nyata diterima sisi native
+## 3. Real payload received by the native side
 
 ```
 $ python scripts/cdp-bridge-test.py --trigger
@@ -37,22 +37,25 @@ $ adb logcat -d -s iitcm | grep 'bridge:'
 bridge: payload portal diterima (237 portal, 26422 char)
 ```
 
-Hitungan akhir pada buffer log: **payload diterima: 3, payload ditolak: 0**.
+Final counts over the log buffer: **payloads accepted: 3, payloads rejected: 0**.
 
-Artinya rantai berikut terbukti hidup dengan data portal sungguhan:
+That means the following chain is proven live with real portal data:
 
 ```
-WebView IITC (login Ingress, 237 portal di viewport)
-  → iitc-auto-bridge.js          (hook mapDataRefreshEnd + throttle)
+WebView IITC (Ingress login, 237 portals in the viewport)
+  → iitc-auto-bridge.js          (mapDataRefreshEnd hook + throttle)
   → app.sendPortals(json)        (JavascriptInterface)
-  → IITC_JSInterface.sendPortals (validasi sumber: intel.ingress.com)
-  → PortalBridge.accept          (batas 256 KB, parser v1)
-  → PortalSnapshot               (237 Portal terparse, 0 ditolak)
-  → PortalMapScreen              (PlaceListMapTemplate — render sudah dibuktikan di emulator AAOS)
+  → IITC_JSInterface.sendPortals (source validation: intel.ingress.com)
+  → PortalBridge.accept          (256 KB limit, v1 parser)
+  → PortalSnapshot               (237 Portals parsed, 0 rejected)
+  → PortalMapScreen              (PlaceListMapTemplate — rendering already proven on the AAOS emulator)
 ```
 
-## Yang masih perlu mobil
+## What still needs the car
 
-Host Android Auto di head unit (Jaecoo) harus mau menampilkan app sideload ini di launcher-nya,
-baik mode nyetir (template POI) maupun mode parked (IITC fullscreen). Semua bagian sebelum titik itu
-sudah terbukti: parsing, pemilihan portal, template, marker, dan now jalur datanya.
+The Android Auto host on the head unit (Jaecoo) has to be willing to show this sideloaded app in its
+launcher, both in driving mode (POI template) and parked mode (fullscreen IITC). Everything before that
+point is already proven: parsing, portal selection, templates, markers, and now the data path.
+
+
+> Note: when these lines were captured the app still logged them in Indonesian; the code logs them in English now.

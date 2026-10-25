@@ -1,10 +1,10 @@
-# Gate 0 + Fondasi — Implementation Plan
+# Gate 0 + Foundation — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Buktikan dua hal yang bisa mematikan seluruh project (Android Auto mau nampilin app sideload kita, dan bentuk data `window.portals` sesuai asumsi), sambil menyiapkan toolchain Android dan base fork IITC Mobile yang kebangun.
+**Goal:** Prove the two things that could kill the whole project (that Android Auto will display our sideloaded app, and that the shape of `window.portals` data matches the assumption), while setting up the Android toolchain and a buildable IITC Mobile fork base.
 
-**Architecture:** Probe app terpisah (kategori POI, `PlaceListMapTemplate`, marker dummy) dipakai buat nge-tes head unit Jaecoo tanpa perlu nyentuh kode IITC. Paralel dengan itu, satu userscript dump memverifikasi kontrak data. Baru setelah dua gate lulus, upstream IITC Mobile diimpor ke repo sebagai base fork.
+**Architecture:** A separate probe app (POI category, `PlaceListMapTemplate`, dummy markers) is used to test the Jaecoo head unit without touching any IITC code. In parallel, a single dump userscript verifies the data contract. Only once both gates pass is upstream IITC Mobile imported into the repo as the fork base.
 
 **Tech Stack:** Android SDK 36.1 + build-tools 36.1.0, JDK 21 (Adoptium), Gradle 8.13, AGP 8.13.0, Kotlin 2.4.21, `androidx.car.app:app:1.7.0` + `app-projected:1.7.0`, Desktop Head Unit r02.0, upstream `IITC-CE/ingress-intel-total-conversion`.
 
@@ -13,50 +13,50 @@
 ## Global Constraints
 
 - Repo root: `C:\Users\mansu\dev\iitc-auto` (git-bash path: `/c/Users/mansu/dev/iitc-auto`).
-- **Selalu** `source scripts/env.sh` sebelum build apa pun. `java` di PATH default mesin ini JDK 25 yang ditolak AGP 8.13.
-- `JAVA_HOME` = `C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot` (format Windows); entri `PATH` = format MSYS `/c/...`. Jangan campur — entri `PATH` bergaya `C:/...` akan pecah jadi dua entri.
-- `ANDROID_HOME` = `C:/Users/mansu/AppData/Local/Android/Sdk`; `sdk.dir` juga sudah di `local.properties` (file ini **tidak** di-commit).
-- Kategori AA = **POI** + izin `androidx.car.app.MAP_TEMPLATES`. **Jangan** pakai `NAVIGATION_TEMPLATES`/`ACCESS_SURFACE` (kategori Navigation punya syarat NF-1 yang nggak bisa kita penuhi).
-- **Nol request tambahan ke intel.ingress.com.** Semua data portal berasal dari sesi IITC yang sudah dibuka user.
-- Nggak ada credential/token Ingress yang boleh masuk repo, log, atau payload bridge.
-- Semua APK di-sideload (debug build). Nggak ada rencana upload ke Play.
-- Probe app berstatus **throwaway** — kalau gate gagal, kodenya dibuang, bukan dirawat.
-- Bahasa kode/komentar: Indonesia santai boleh, identifier tetap Inggris.
+- **Always** `source scripts/env.sh` before any build. The `java` on this machine's default PATH is JDK 25, which AGP 8.13 rejects.
+- `JAVA_HOME` = `C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot` (Windows format); `PATH` entries = MSYS format `/c/...`. Don't mix the two — a `PATH` entry in `C:/...` style will split into two entries.
+- `ANDROID_HOME` = `C:/Users/mansu/AppData/Local/Android/Sdk`; `sdk.dir` is also already in `local.properties` (this file is **not** committed).
+- AA category = **POI** + the `androidx.car.app.MAP_TEMPLATES` permission. **Do not** use `NAVIGATION_TEMPLATES`/`ACCESS_SURFACE` (the Navigation category has NF-1 requirements we can't meet).
+- **Zero extra requests to intel.ingress.com.** All portal data comes from an IITC session the user already has open.
+- No Ingress credentials/tokens may enter the repo, logs, or the bridge payload.
+- All APKs are sideloaded (debug build). There is no plan to upload to Play.
+- The probe app is **throwaway** — if the gate fails, the code is discarded, not maintained.
+- Code/comment language: casual Indonesian is fine, identifiers stay English.
 
 ---
 
-### Task 1: Toolchain Android (cmdline-tools + DHU)
+### Task 1: Android toolchain (cmdline-tools + DHU)
 
 **Files:**
 - Create: `scripts/install-android-tools.sh`
 - Create: `docs/notes/toolchain.md`
 
 **Interfaces:**
-- Produces: `$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager` (dipakai Task 2 untuk lisensi) dan `$ANDROID_HOME/extras/google/auto/desktop-head-unit.exe` (dipakai Task 5 buat tes layar di laptop).
+- Produces: `$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager` (used by Task 2 for licenses) and `$ANDROID_HOME/extras/google/auto/desktop-head-unit.exe` (used by Task 5 to test the screen on a laptop).
 
-- [ ] **Step 1: Tulis script installer**
+- [ ] **Step 1: Write the installer script**
 
 ```bash
 #!/usr/bin/env bash
 # scripts/install-android-tools.sh
-# Install cmdline-tools (sdkmanager) + Desktop Head Unit ke Android SDK yang sudah ada.
+# Install cmdline-tools (sdkmanager) + Desktop Head Unit into the existing Android SDK.
 set -e
 
 source "$(dirname "$0")/env.sh"
 
-CLT_VERSION="16111833"   # versi terbaru di repository2-3.xml per 2026-10-24
+CLT_VERSION="16111833"   # newest version in repository2-3.xml as of 2026-10-24
 CLT_URL="https://dl.google.com/android/repository/commandlinetools-win-${CLT_VERSION}_latest.zip"
 TMP="${TMPDIR:-/tmp}/clt-download"
 SDK_WIN="C:/Users/mansu/AppData/Local/Android/Sdk"
 SDK_MSYS="/c/Users/mansu/AppData/Local/Android/Sdk"
 
 if [ -x "$SDK_MSYS/cmdline-tools/latest/bin/sdkmanager.bat" ]; then
-  echo "cmdline-tools sudah ada, skip download"
+  echo "cmdline-tools already present, skipping the download"
 else
   rm -rf "$TMP" && mkdir -p "$TMP"
   echo "Download $CLT_URL"
   curl -L -o "$TMP/clt.zip" "$CLT_URL"
-  # zip-nya berisi folder 'cmdline-tools/'; sdkmanager WAJIB ada di path 'cmdline-tools/latest/'
+  # the zip contains a 'cmdline-tools/' folder; sdkmanager MUST live at path 'cmdline-tools/latest/'
   unzip -q "$TMP/clt.zip" -d "$TMP"
   rm -rf "$SDK_MSYS/cmdline-tools/latest"
   mkdir -p "$SDK_MSYS/cmdline-tools"
@@ -69,35 +69,35 @@ yes | "$SDKMANAGER" --sdk_root="$SDK_WIN" --licenses >/dev/null || true
 "$SDKMANAGER" --sdk_root="$SDK_WIN" "extras;google;auto"
 "$SDKMANAGER" --sdk_root="$SDK_WIN" --list_installed
 
-echo "--- verifikasi ---"
+echo "--- verification ---"
 ls -l "$SDK_MSYS/extras/google/auto/desktop-head-unit.exe"
 ```
 
-- [ ] **Step 2: Jalankan**
+- [ ] **Step 2: Run it**
 
 Run: `cd /c/Users/mansu/dev/iitc-auto && bash scripts/install-android-tools.sh`
-Expected: download sukses, `sdkmanager` terpasang, DHU terunduh, dan baris terakhir nunjukin `desktop-head-unit.exe` ada.
+Expected: the download succeeds, `sdkmanager` is installed, DHU is downloaded, and the last line shows `desktop-head-unit.exe` exists.
 
-- [ ] **Step 3: Catat status toolchain**
+- [ ] **Step 3: Record the toolchain status**
 
-Buat `docs/notes/toolchain.md` berisi: versi JDK terpakai, path SDK, versi SDK platform/build-tools, versi cmdline-tools, versi DHU, dan **apa yang masih kurang** (mis. system image emulator belum ada). Sertakan output `sdkmanager --list_installed`.
+Create `docs/notes/toolchain.md` containing: the JDK version in use, the SDK path, the SDK platform/build-tools versions, the cmdline-tools version, the DHU version, and **what's still missing** (e.g. no emulator system image yet). Include the output of `sdkmanager --list_installed`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add scripts/install-android-tools.sh docs/notes/toolchain.md
-git commit -m "chore(toolchain): installer cmdline-tools + Desktop Head Unit"
+git commit -m "chore(toolchain): cmdline-tools + Desktop Head Unit installer"
 ```
 
 ---
 
-### Task 2: Probe APK Android Auto (kategori POI) yang kebangun
+### Task 2: A buildable Android Auto probe APK (POI category)
 
 **Files:**
 - Create: `probe/settings.gradle.kts`
 - Create: `probe/build.gradle.kts`
 - Create: `probe/gradle.properties`
-- Create: `probe/local.properties` (gitignored; isi `sdk.dir` sama seperti root)
+- Create: `probe/local.properties` (gitignored; contains the same `sdk.dir` as the root)
 - Create: `probe/app/build.gradle.kts`
 - Create: `probe/app/src/main/AndroidManifest.xml`
 - Create: `probe/app/src/main/res/xml/automotive_app_desc.xml`
@@ -110,19 +110,19 @@ git commit -m "chore(toolchain): installer cmdline-tools + Desktop Head Unit"
 - Create: `scripts/bootstrap-gradle.sh`
 
 **Interfaces:**
-- Consumes: `sdkmanager` dari Task 1 (buat lisensi SDK kalau belum).
-- Produces: `probe/app/build/outputs/apk/debug/app-debug.apk`, package `id.acunet.portalprobe`, entry point AA `ProbeCarAppService`, dan `ProbeData.PROBE_PORTALS: List<ProbePortal>` (Task 3 tinggal install & tes).
+- Consumes: `sdkmanager` from Task 1 (for SDK licenses, if not already accepted).
+- Produces: `probe/app/build/outputs/apk/debug/app-debug.apk`, package `id.acunet.portalprobe`, the AA entry point `ProbeCarAppService`, and `ProbeData.PROBE_PORTALS: List<ProbePortal>` (Task 3 only has to install & test).
 
-- [ ] **Step 1: Siapkan Gradle 8.13 (wrapper belum ada di mesin ini)**
+- [ ] **Step 1: Set up Gradle 8.13 (no wrapper on this machine yet)**
 
-`gradle` nggak terpasang di PATH, jadi unduh distribusinya sekali di luar repo, pakai buat generate wrapper yang kita commit.
+`gradle` isn't on the PATH, so download the distribution once, outside the repo, and use it to generate the wrapper we commit.
 
 ```bash
 #!/usr/bin/env bash
 # scripts/bootstrap-gradle.sh
 set -e
 TOOLS="/c/Users/mansu/dev/tools"
-TOOLS_WIN="C:/Users/mansu/dev/tools"   # curl itu native tool: butuh path Windows
+TOOLS_WIN="C:/Users/mansu/dev/tools"   # curl is a native tool: it needs a Windows path
 DIST="$TOOLS/gradle-8.13"
 mkdir -p "$TOOLS"
 if [ ! -f "$DIST/bin/gradle" ]; then
@@ -133,9 +133,9 @@ fi
 ```
 
 Run: `bash scripts/bootstrap-gradle.sh`
-Expected: `Gradle 8.13` tampil dengan JVM 21 (`source scripts/env.sh` dulu).
+Expected: `Gradle 8.13` shows up with JVM 21 (`source scripts/env.sh` first).
 
-- [ ] **Step 2: Tulis file Gradle project probe**
+- [ ] **Step 2: Write the probe project's Gradle files**
 
 `probe/settings.gradle.kts`:
 ```kotlin
@@ -202,12 +202,12 @@ dependencies {
 }
 ```
 
-`probe/local.properties` (jangan di-commit):
+`probe/local.properties` (do not commit):
 ```properties
 sdk.dir=C:/Users/mansu/AppData/Local/Android/Sdk
 ```
 
-- [ ] **Step 3: Generate wrapper lalu verifikasi konfigurasi**
+- [ ] **Step 3: Generate the wrapper, then verify the configuration**
 
 Run:
 ```bash
@@ -215,9 +215,9 @@ cd /c/Users/mansu/dev/iitc-auto/probe
 "/c/Users/mansu/dev/tools/gradle-8.13/bin/gradle" wrapper --gradle-version 8.13
 ./gradlew --version
 ```
-Expected: `Gradle 8.13` + JVM 21. Kalau Kotlin 2.4.21 ditolak AGP 8.13 (pesan "incompatible"), turunkan ke `2.2.20` di `probe/build.gradle.kts` dan ulangi.
+Expected: `Gradle 8.13` + JVM 21. If Kotlin 2.4.21 is rejected by AGP 8.13 (an "incompatible" message), drop to `2.2.20` in `probe/build.gradle.kts` and repeat.
 
-- [ ] **Step 4: Tulis test dulu (RED)**
+- [ ] **Step 4: Write the test first (RED)**
 
 `probe/app/src/test/java/id/acunet/portalprobe/ProbeDataTest.kt`:
 ```kotlin
@@ -229,18 +229,18 @@ import org.junit.Test
 
 class ProbeDataTest {
     @Test
-    fun `tiga marker probe dengan faction berbeda`() {
+    fun `three probe markers with different factions`() {
         val portals = ProbeData.PROBE_PORTALS
         assertEquals(3, portals.size)
         assertEquals(setOf("R", "E", "N"), portals.map { it.team }.toSet())
     }
 
     @Test
-    fun `level dan koordinat masuk rentang wajar`() {
+    fun `levels and coordinates stay within a plausible range`() {
         ProbeData.PROBE_PORTALS.forEach { p ->
-            assertTrue("level ${p.level} di luar 1..8", p.level in 1..8)
-            assertTrue("lat ${p.lat} di luar Jakarta", p.lat in -7.0..-5.5)
-            assertTrue("lng ${p.lng} di luar Jakarta", p.lng in 106.0..107.5)
+            assertTrue("level ${p.level} outside 1..8", p.level in 1..8)
+            assertTrue("lat ${p.lat} outside Jakarta", p.lat in -7.0..-5.5)
+            assertTrue("lng ${p.lng} outside Jakarta", p.lng in 106.0..107.5)
         }
     }
 }
@@ -249,13 +249,13 @@ class ProbeDataTest {
 Run: `./gradlew :app:testDebugUnitTest --tests '*ProbeDataTest*'`
 Expected: FAIL — `Unresolved reference: ProbeData`.
 
-- [ ] **Step 5: Implementasi data + service + screen (GREEN)**
+- [ ] **Step 5: Implement the data + service + screen (GREEN)**
 
 `probe/app/src/main/java/id/acunet/portalprobe/ProbeData.kt`:
 ```kotlin
 package id.acunet.portalprobe
 
-/** Data dummy buat gate Android Auto. Throwaway — dibuang setelah gate lulus. */
+/** Dummy data for the Android Auto gate. Throwaway — discarded once the gate passes. */
 data class ProbePortal(
     val name: String,
     val lat: Double,
@@ -266,9 +266,9 @@ data class ProbePortal(
 )
 
 object ProbeData {
-    // Tiga portal nyata di sekitar Monas/Jakarta Pusat, cukup buat ngetes marker + warna.
+    // Three real portals around Monas/Central Jakarta, enough to test markers + colours.
     val PROBE_PORTALS = listOf(
-        ProbePortal("Probe · Monas Selatan", -6.17650, 106.82710, "R", 8, 210),
+        ProbePortal("Probe · Monas South", -6.17650, 106.82710, "R", 8, 210),
         ProbePortal("Probe · Gambir Station", -6.17670, 106.83070, "E", 6, 640),
         ProbePortal("Probe · Istiqlal", -6.17020, 106.83120, "N", 1, 980),
     )
@@ -286,7 +286,7 @@ import androidx.car.app.validation.HostValidator
 
 class ProbeCarAppService : CarAppService() {
     override fun createHostValidator(): HostValidator =
-        HostValidator.ALLOW_ALL_HOSTS_VALIDATOR // hanya wajar buat build debug/sideload
+        HostValidator.ALLOW_ALL_HOSTS_VALIDATOR // only reasonable for a debug/sideload build
 
     override fun onCreateSession(sessionInfo: SessionInfo) = ProbeSession()
 }
@@ -336,7 +336,7 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
                     Row.Builder()
                         .setTitle(p.name)
                         .addText("L${p.level} · ${p.team} · ${p.distanceM} m")
-                        // Marker di peta host berasal dari Metadata -> Place, bukan dari daftar itu sendiri.
+                        // Markers on the host map come from Metadata -> Place, not from the list itself.
                         .setMetadata(Metadata.Builder().setPlace(places[i]).build())
                         .build()
                 )
@@ -347,7 +347,7 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
             .setTitle("Portal Probe")
             .setHeaderAction(Action.APP_ICON)
             .setCurrentLocationEnabled(true)
-            // setAnchor() minta Place (bukan CarLocation) di Car App 1.7.
+            // setAnchor() wants a Place (not a CarLocation) in Car App 1.7.
             .setAnchor(places.first())
             .setItemList(rows)
             .build()
@@ -355,9 +355,9 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
 }
 ```
 
-`ProbeSession` ditulis inline di file service-nya (satu file, tanggung jawab kecil):
+`ProbeSession` is written inline in the service file (one file, small responsibility):
 ```kotlin
-// tambahkan di ProbeCarAppService.kt
+// add this to ProbeCarAppService.kt
 class ProbeSession : androidx.car.app.Session() {
     override fun onCreateScreen(intent: android.content.Intent) = ProbeScreen(carContext)
 }
@@ -371,13 +371,13 @@ import android.os.Bundle
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 
-/** Cuma supaya APK ada entry point di HP (gampang dicek pas debugging sideload). */
+/** Just so the APK has an entry point on the phone (handy to check while debugging a sideload). */
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(TextView(this).apply {
-            text = "Portal Probe — install OK.\nBuka lewat Android Auto di mobil.\n" +
-                "Kalau nggak muncul di launcher AA: aktifkan Developer mode + Unknown sources."
+            text = "Portal Probe — install OK.\nOpen it through Android Auto in the car.\n" +
+                "If it doesn't show up in the AA launcher: enable Developer mode + Unknown sources."
             textSize = 16f
             setPadding(48, 96, 48, 48)
         })
@@ -385,7 +385,7 @@ class MainActivity : AppCompatActivity() {
 }
 ```
 
-- [ ] **Step 6: Manifest + deklarasi app mobil**
+- [ ] **Step 6: Manifest + car app declaration**
 
 `probe/app/src/main/res/xml/automotive_app_desc.xml`:
 ```xml
@@ -400,7 +400,7 @@ class MainActivity : AppCompatActivity() {
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- POI app: cuma boleh minta MAP_TEMPLATES. JANGAN tambah NAVIGATION_TEMPLATES/ACCESS_SURFACE. -->
+    <!-- POI app: may only request MAP_TEMPLATES. Do NOT add NAVIGATION_TEMPLATES/ACCESS_SURFACE. -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
 
     <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
@@ -443,7 +443,7 @@ class MainActivity : AppCompatActivity() {
 </resources>
 ```
 
-- [ ] **Step 7: Test hijau + build APK**
+- [ ] **Step 7: Green tests + build the APK**
 
 Run:
 ```bash
@@ -452,82 +452,82 @@ cd /c/Users/mansu/dev/iitc-auto/probe
 ./gradlew :app:assembleDebug
 ls -l app/build/outputs/apk/debug/app-debug.apk
 ```
-Expected: test PASS, APK terbentuk.
+Expected: tests PASS, APK produced.
 
 - [ ] **Step 8: Commit**
 
 ```bash
 git add scripts/bootstrap-gradle.sh probe .gitignore
-git commit -m "feat(probe): APK Android Auto kategori POI buat gate 0a"
+git commit -m "feat(probe): Android Auto APK in the POI category for gate 0a"
 ```
 
 ---
 
-### Task 3: Gate 0a — tes probe di Jaecoo
+### Task 3: Gate 0a — probe test on the Jaecoo
 
 **Files:**
 - Create: `docs/notes/gate0a-android-auto.md`
 
 **Interfaces:**
-- Consumes: `probe/app/build/outputs/apk/debug/app-debug.apk` dari Task 2.
-- Produces: keputusan go/no-go yang dipakai Task 6.
+- Consumes: `probe/app/build/outputs/apk/debug/app-debug.apk` from Task 2.
+- Produces: the go/no-go decision used by Task 6.
 
-- [ ] **Step 1: Aktifkan mode developer Android Auto di HP**
+- [ ] **Step 1: Enable Android Auto developer mode on the phone**
 
-Di HP: `Settings > Apps > Android Auto > Advanced > Additional settings in the app >` (menu overflow) `Developer settings` → aktifkan **Developer mode**; lalu di menu yang sama pilih **Application mode: Developer** dan aktifkan **Unknown sources**.
+On the phone: `Settings > Apps > Android Auto > Advanced > Additional settings in the app >` (overflow menu) `Developer settings` → enable **Developer mode**; then in the same menu pick **Application mode: Developer** and enable **Unknown sources**.
 
-- [ ] **Step 2: Install APK**
+- [ ] **Step 2: Install the APK**
 
 ```bash
 source /c/Users/mansu/dev/iitc-auto/scripts/env.sh
-adb devices                                  # HP harus muncul sebagai 'device' (bukan 'unauthorized')
+adb devices                                  # the phone must show up as 'device' (not 'unauthorized')
 adb install -r /c/Users/mansu/dev/iitc-auto/probe/app/build/outputs/apk/debug/app-debug.apk
 adb shell cmd package list packages | grep portalprobe
 ```
-Expected: `Success`, dan package `id.acunet.portalprobe` kelihatan.
+Expected: `Success`, and the `id.acunet.portalprobe` package is visible.
 
-- [ ] **Step 3: Cek di mobil**
+- [ ] **Step 3: Check in the car**
 
-Sambungkan HP ke Jaecoo (USB dulu — USB lebih gampang di-debug daripada wireless). Di launcher Android Auto cari **Portal Probe**; kalau nggak kelihatan, buka **Customize launcher** dan aktifkan.
+Connect the phone to the Jaecoo (USB first — USB is easier to debug than wireless). In the Android Auto launcher look for **Portal Probe**; if it isn't there, open **Customize launcher** and enable it.
 
-- [ ] **Step 4: Kalau nggak muncul, kumpulkan bukti (jangan tebak)**
+- [ ] **Step 4: If it doesn't show up, gather evidence (don't guess)**
 
 ```bash
 adb logcat -d | grep -iE 'CAR\.AUTH|carapp|portalprobe|template' | tail -60
 adb shell dumpsys package id.acunet.portalprobe | grep -A3 -iE 'car|intent'
 ```
-Catat pesan `CAR.AUTH` — inilah yang nunjukin AA nolak app sideload.
+Note the `CAR.AUTH` messages — these are what indicates AA rejecting the sideloaded app.
 
-- [ ] **Step 5: Tulis hasilnya**
+- [ ] **Step 5: Write down the result**
 
-`docs/notes/gate0a-android-auto.md`: peta jalan (USB/wireless, model HP, versi Android Auto, versi AA di mobil), hasil (muncul / nggak), log mentah, dan kalau muncul: screenshot tampilan marker.
+`docs/notes/gate0a-android-auto.md`: the route (USB/wireless, phone model, Android Auto version, AA version in the car), the result (shows / doesn't show), the raw logs, and if it shows up: a screenshot of the marker display.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add docs/notes/gate0a-android-auto.md
-git commit -m "test(gate0a): hasil tes probe app di head unit Jaecoo"
+git commit -m "test(gate0a): probe app test results on the Jaecoo head unit"
 ```
 
 ---
 
-### Task 4: Gate 0b — verifikasi bentuk data `window.portals`
+### Task 4: Gate 0b — verify the shape of `window.portals` data
 
 **Files:**
 - Create: `probe/userscripts/dump-portals.user.js`
-- Create: `docs/notes/gate0b-window-portals.md` (diisi setelah hasil dump masuk)
+- Create: `docs/notes/gate0b-window-portals.md` (filled in once the dump result is in)
 
 **Interfaces:**
-- Produces: daftar field `window.portals[guid].options.data` yang **nyata**; hasilnya mengonfirmasi atau mengoreksi kontrak §4 spec sebelum `PortalJsonParser` ditulis.
+- Produces: the list of **real** `window.portals[guid].options.data` fields; the result confirms or corrects the spec §4 contract before `PortalJsonParser` is written.
 
-- [ ] **Step 1: Tulis userscript dump**
+- [ ] **Step 1: Write the dump userscript**
 
 ```javascript
 // ==UserScript==
 // @name         IITC Dump: window.portals
 // @namespace    id.acunet.iitc
 // @version      0.1
-// @description  Dump bentuk data satu portal IITC buat verifikasi kontrak bridge
+// @description  Dump the data shape of one IITC portal to verify the bridge contract
 // @author       Acunet
 // @match        https://intel.ingress.com/*
 // @grant        none
@@ -541,7 +541,7 @@ git commit -m "test(gate0a): hasil tes probe app di head unit Jaecoo"
   let dumped = false;
 
   window.addHook('mapDataRefreshEnd', function () {
-    if (dumped) return;                       // sekali aja, jangan spam dialog
+    if (dumped) return;                       // once only, don't spam dialogs
     const keys = Object.keys(window.portals || {});
     if (keys.length === 0) return;
     dumped = true;
@@ -563,54 +563,54 @@ git commit -m "test(gate0a): hasil tes probe app di head unit Jaecoo"
     console.log(json);
 
     if (typeof android !== 'undefined' && android.saveFile) {
-      android.saveFile('iitc-portals-dump.json', 'application/json', json); // buka dialog simpan di HP
+      android.saveFile('iitc-portals-dump.json', 'application/json', json); // opens the save dialog on the phone
     } else {
-      alert('Dump sudah ditulis ke console IITC (tab Debug); simpan manual.');
+      alert('The dump has been written to the IITC console (Debug tab); save it manually.');
     }
   });
 })();
 ```
 
-- [ ] **Step 2: Pasang & jalankan di HP**
+- [ ] **Step 2: Install & run it on the phone**
 
-Copy `dump-portals.user.js` ke folder plugin IITC Mobile (atau buka lewat IITC → `Preferences > Plugins > User scripts > add by URL/file`), buka Intel map area Jakarta sampai peta ke-load, tunggu dialog "save file", simpan ke Downloads.
+Copy `dump-portals.user.js` into the IITC Mobile plugins folder (or open it via IITC → `Preferences > Plugins > User scripts > add by URL/file`), open the Intel map over the Jakarta area until the map loads, wait for the "save file" dialog, and save to Downloads.
 
-- [ ] **Step 3: Tarik hasilnya ke repo**
+- [ ] **Step 3: Pull the result into the repo**
 
 ```bash
 adb pull /sdcard/Download/iitc-portals-dump.json /c/Users/mansu/AppData/Local/hermes/profiles/dev/cache/scratch/
 ```
-(catatan: `saveFile` bisa nyimpen ke lokasi lain, sesuaikan path.)
+(note: `saveFile` may save to another location, adjust the path.)
 
-- [ ] **Step 4: Bandingkan dengan kontrak spec §4 dan tulis hasilnya**
+- [ ] **Step 4: Compare against the spec §4 contract and write down the result**
 
-Isi `docs/notes/gate0b-window-portals.md` dengan: daftar `dataKeys` nyata, field yang dipakai bridge (`latE6`/`lngE6`/`team`/`level`/`title`/`health` — ada/tidak), dan **koreksi kontrak** kalau ternyata beda. Contoh isi yang diharapkan: `latE6` + `lngE6` ada, `team` berupa string `'R'/'E'/'M'/'N'`.
+Fill in `docs/notes/gate0b-window-portals.md` with: the real `dataKeys` list, the fields the bridge uses (`latE6`/`lngE6`/`team`/`level`/`title`/`health` — present or not), and a **contract correction** if they turn out different. Example of the expected content: `latE6` + `lngE6` present, `team` a string `'R'/'E'/'M'/'N'`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add probe/userscripts/dump-portals.user.js docs/notes/gate0b-window-portals.md
-git commit -m "test(gate0b): dump dan verifikasi bentuk data window.portals"
+git commit -m "test(gate0b): dump and verify the shape of window.portals data"
 ```
 
 ---
 
-### Task 5: Import upstream IITC Mobile + build apa adanya
+### Task 5: Import upstream IITC Mobile + build as-is
 
 **Files:**
 - Create: `scripts/import-upstream.sh`
-- Create (hasil import): `mobile/`, `code/`, `build.py`, dll dari upstream
+- Create (import result): `mobile/`, `code/`, `build.py`, etc. from upstream
 - Create: `docs/notes/upstream.md`
 
 **Interfaces:**
-- Consumes: repo ini sebagai fork penuh upstream.
-- Produces: `mobile/gradlew`, `mobile/app/` (base yang nanti ditempeli bridge di plan berikutnya), dan catatan SHA upstream yang diimpor.
+- Consumes: this repo as a full upstream fork.
+- Produces: `mobile/gradlew`, `mobile/app/` (the base that the bridge gets attached to in the next plan), and a record of the imported upstream SHA.
 
-- [ ] **Step 1: Tulis script import**
+- [ ] **Step 1: Write the import script**
 
 ```bash
 #!/usr/bin/env bash
-# scripts/import-upstream.sh — impor tree upstream ke repo ini (fork by content).
+# scripts/import-upstream.sh — import the upstream tree into this repo (fork by content).
 set -e
 REPO="/c/Users/mansu/dev/iitc-auto"
 UPSTREAM="https://github.com/IITC-CE/ingress-intel-total-conversion.git"
@@ -624,87 +624,87 @@ else git clone --depth 1 "$UPSTREAM" "$TMP"; fi
 SHA=$(git -C "$TMP" rev-parse HEAD)
 echo "upstream SHA=$SHA"
 
-# README.md kita dipertahankan; README upstream masuk sebagai README-UPSTREAM.md
-# (rsync nggak ada di git-bash host ini -> pakai tar)
+# our README.md is kept; the upstream README comes in as README-UPSTREAM.md
+# (rsync isn't available on this git-bash host -> use tar)
 tar cf - --exclude='./.git' --exclude='./.github' --exclude='./README.md' --exclude='./.gitignore' \
   . | ( cd "$REPO" && tar xf - )
 cp "$TMP/README.md" "$REPO/README-UPSTREAM.md"
 
 printf 'upstream=%s\nsha=%s\ntanggal_import=%s\n' \
   "$UPSTREAM" "$SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$REPO/docs/notes/upstream.md"
-echo "selesai — cek: git -C $REPO status --short | head"
+echo "done — check: git -C $REPO status --short | head"
 ```
 
-- [ ] **Step 2: Jalankan & commit import**
+- [ ] **Step 2: Run & commit the import**
 
 ```bash
 cd /c/Users/mansu/dev/iitc-auto
 bash scripts/import-upstream.sh
 git add -A && git commit -m "vendor: import upstream IITC-CE @ $(git rev-parse --short upstream/master)"
 ```
-Expected: tree upstream masuk, commit baru terbentuk, `docs/notes/upstream.md` berisi SHA.
+Expected: the upstream tree is imported, a new commit is created, `docs/notes/upstream.md` contains the SHA.
 
-- [ ] **Step 3: Build upstream apa adanya (INI TES PENTING)**
+- [ ] **Step 3: Build upstream as-is (THIS IS THE IMPORTANT TEST)**
 
 ```bash
 source /c/Users/mansu/dev/iitc-auto/scripts/env.sh
 cd /c/Users/mansu/dev/iitc-auto/mobile
-./gradlew --version          # harus Gradle 8.13 + JVM 21
+./gradlew --version          # must be Gradle 8.13 + JVM 21
 ./gradlew assembleDebug
 ls -l app/build/outputs/apk/debug/
 ```
-Expected: APK debug IITC Mobile terbentuk.
+Expected: an IITC Mobile debug APK is produced.
 
-- [ ] **Step 4: Kalau build gagal — catat, jangan tambal buta**
+- [ ] **Step 4: If the build fails — record it, don't patch blindly**
 
-Tulis error persisnya (task yang gagal + pesan pertama) ke `docs/notes/upstream.md`. Kandidat penyebab yang sudah diketahui: `compileSdk 36` belum lengkap, signing config debug (`../keystore/debug.keystore`) belum ada, atau versi AGP/Kotlin nggak cocok dengan JDK 21. Kalau nggak selesai dalam satu sesi, **berhenti dan laporkan** — ini gate F1, bukan kerjaan yang boleh dipaksa.
+Write the exact error (the failing task + the first message) into `docs/notes/upstream.md`. Known candidate causes: `compileSdk 36` not fully installed, the debug signing config (`../keystore/debug.keystore`) missing, or an AGP/Kotlin version that doesn't match JDK 21. If it isn't resolved within one session, **stop and report** — this is gate F1, not work that should be forced.
 
-- [ ] **Step 5: Install ke HP dan cek login**
+- [ ] **Step 5: Install on the phone and check login**
 
 ```bash
 adb install -r mobile/app/build/outputs/apk/debug/app-debug.apk
 ```
-Buka app, login Ingress seperti biasa (kalau muncul `403 disallowed_useragent`: login dulu lewat Chrome, baru balik ke app — ini workaround resmi upstream), lalu pastikan peta portal muncul.
+Open the app, log in to Ingress as usual (if `403 disallowed_useragent` appears: log in through Chrome first, then go back to the app — this is the official upstream workaround), then make sure the portal map appears.
 
-- [ ] **Step 6: Commit catatan**
+- [ ] **Step 6: Commit the notes**
 
 ```bash
 git add docs/notes/upstream.md
-git commit -m "docs: status build upstream IITC Mobile di mesin ini"
+git commit -m "docs: build status of upstream IITC Mobile on this machine"
 ```
 
 ---
 
-### Task 6: Keputusan gate → lanjut plan berikutnya
+### Task 6: Gate decision → proceed to the next plan
 
 **Files:**
 - Create: `docs/notes/gate0-decision.md`
 
-- [ ] **Step 1: Rekap tiga hasil**
+- [ ] **Step 1: Recap the three results**
 
-Tulis dengan angka/bukti, bukan opini:
-1. Gate 0a: app sideload muncul di Jaecoo? (ya/tidak + log)
-2. Gate 0b: field data portal yang nyata (kutip `dataKeys`)
-3. F1: upstream IITC Mobile kebangun & login jalan?
+Write with numbers/evidence, not opinion:
+1. Gate 0a: does the sideloaded app show up in the Jaecoo? (yes/no + logs)
+2. Gate 0b: the real portal data fields (quote `dataKeys`)
+3. F1: does upstream IITC Mobile build & does login work?
 
-- [ ] **Step 2: Putuskan dan tulis berikutnya**
+- [ ] **Step 2: Decide and write the next steps**
 
-- Semua lulus → plan berikutnya: "Bridge + Car UI" (`sendPortals`, `PortalRepository`, userscript bridge ber-throttle, `PortalMapScreen`, target ops, indikator stale).
-- Gate 0a gagal → **stop**: tulis ulang opsi (head unit Android/tablet terpisah, atau AAOS), jangan lanjut nulis fitur AA.
-- Gate 0b beda dari asumsi → koreksi kontrak §4 spec dulu, baru lanjut.
-- F1 gagal build → sepakati rencana B (app WebView sendiri) secara eksplisit, termasuk konsekuensi OAuth di §2 spec.
+- Everything passes → next plan: "Bridge + Car UI" (`sendPortals`, `PortalRepository`, the throttled bridge userscript, `PortalMapScreen`, op targets, stale indicator).
+- Gate 0a fails → **stop**: rewrite the options (a separate Android head unit/tablet, or AAOS), do not continue writing AA features.
+- Gate 0b differs from the assumption → correct the spec §4 contract first, then continue.
+- F1 fails to build → explicitly agree on plan B (our own WebView app), including the OAuth consequences in spec §2.
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add docs/notes/gate0-decision.md
-git commit -m "docs: keputusan gate 0 dan arah fase berikutnya"
+git commit -m "docs: gate 0 decision and the direction for the next phase"
 ```
 
 ---
 
-## Catatan eksekusi
+## Execution notes
 
-- Fase ini **tidak menyentuh** kode IITC Mobile selain mengimpornya utuh. Semua perubahan bridge ada di plan berikutnya.
-- Task 1 dan Task 2 bisa jalan paralel; Task 3 butuh mobil + HP; Task 4 butuh HP + akun Ingress; Task 5 butuh toolchain Task 1 selesai.
-- Yang bisa gua (agent) kerjakan tanpa lu: Task 1, Task 2 (kode + build), Task 5 Step 1-3 (import + build). Yang butuh lu di HP/mobil: Task 3, Task 4 Step 2, Task 5 Step 5.
+- This phase **does not touch** IITC Mobile code beyond importing it wholesale. All bridge changes are in the next plan.
+- Task 1 and Task 2 can run in parallel; Task 3 needs the car + phone; Task 4 needs the phone + an Ingress account; Task 5 needs Task 1's toolchain finished.
+- What I (the agent) can do without you: Task 1, Task 2 (code + build), Task 5 Steps 1-3 (import + build). What needs you at the phone/car: Task 3, Task 4 Step 2, Task 5 Step 5.

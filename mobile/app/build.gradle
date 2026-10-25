@@ -55,12 +55,12 @@ android {
             }
         }
     }
-    // Dua runtime Android for Cars butuh artefak + minSdk yang berbeda:
-    //  - projected  (Android Auto: HP di-mirror ke head unit) -> app-projected, minSdk 21 (warisan)
-    //  - automotive (AAOS: OS mobil terpasang di head unit)  -> app-automotive, minSdk 29,
-    //    dan butuh entry point CarAppActivity supaya car launcher membukanya sebagai car app.
-    // Menyatukan keduanya dalam satu varian bentrok di meta-data
-    // CarAppMetadataHolderService.CAR_HARDWARE_MANAGER (dua nilai berbeda dari dua library itu).
+    // The two Android for Cars runtimes need different artifacts and minSdk values:
+    //  - projected  (Android Auto: phone mirrored to the head unit) -> app-projected, minSdk 21 (legacy)
+    //  - automotive (AAOS: car OS running on the head unit)         -> app-automotive, minSdk 29,
+    //    and it needs a CarAppActivity entry point so the car launcher opens it as a car app.
+    // Merging the two into a single variant clashes on the
+    // CarAppMetadataHolderService.CAR_HARDWARE_MANAGER meta-data (two different values from the two libraries).
     flavorDimensions 'runtime'
     productFlavors {
         projected {
@@ -131,16 +131,16 @@ dependencies {
     implementation 'com.melnykov:floatingactionbutton:1.3.0'
     implementation 'androidx.documentfile:documentfile:1.1.0'
 
-    // Layer Android Auto (mode nyetir): template POI + StateFlow buat nyalurin data portal
-    // dari bridge userscript ke layar mobil. Dua artefak runtime dipisah per flavor.
+    // Android Auto layer (driving mode): POI templates + StateFlow to pipe portal data
+    // from the userscript bridge to the car screen. The two runtime artifacts are split per flavor.
     implementation 'androidx.car.app:app:1.7.0'
     projectedImplementation 'androidx.car.app:app-projected:1.7.0'
     automotiveImplementation 'androidx.car.app:app-automotive:1.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
 
     testImplementation 'junit:junit:4.12'
-    // org.json asli buat unit test: di android.jar kelas ini cuma stub yang melempar
-    // "not mocked", jadi parser nggak bisa diuji tanpa implementasi nyata.
+    // Real org.json for unit tests: in android.jar this class is only a stub that throws
+    // "not mocked", so the parser cannot be tested without a real implementation.
     testImplementation 'org.json:json:20240303'
 }
 

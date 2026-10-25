@@ -7,8 +7,8 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
-        // Kotlin dipakai buat layer Android Auto (CarAppService/Screen/StateFlow).
-        // Fork ini Java semua; Kotlin cuma dipakai di paket .car.
+        // Kotlin is used for the Android Auto layer (CarAppService/Screen/StateFlow).
+        // This fork is all Java; Kotlin is only used in the .car package.
         classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.21'
 
         // NOTE: Do not place your application dependencies here; they belong

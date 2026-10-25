@@ -1,5 +1,5 @@
-# scripts/capture-window.ps1 — screenshot satu jendela spesifik (default: jendela Desktop Head Unit).
-# Dipakai buat ngambil tampilan head unit virtual tanpa harus motret seluruh desktop.
+# scripts/capture-window.ps1 — screenshot one specific window (default: the Desktop Head Unit window).
+# Used to capture the virtual head unit view without having to shoot the whole desktop.
 #   powershell -ExecutionPolicy Bypass -File scripts/capture-window.ps1 -ProcessName desktop-head-unit -Path C:/.../dhu.png
 param(
     [string]$ProcessName = "desktop-head-unit",
@@ -20,7 +20,7 @@ public class WinHelper {
 
 $p = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 if (-not $p) {
-    Write-Output "JENDELA_TIDAK_DITEMUKAN: proses '$ProcessName' nggak jalan atau belum punya jendela"
+    Write-Output "JENDELA_TIDAK_DITEMUKAN: process '$ProcessName' is not running or has no window yet"
     exit 2
 }
 
@@ -39,4 +39,4 @@ $gfx.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size $w, $
 $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
 $gfx.Dispose(); $bmp.Dispose()
 
-Write-Output ("OK jendela '" + $ProcessName + "' " + $w + "x" + $h + " -> " + $Path)
+Write-Output ("OK window '" + $ProcessName + "' " + $w + "x" + $h + " -> " + $Path)

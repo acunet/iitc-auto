@@ -42,9 +42,9 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
 
         val rows = ItemList.Builder().apply {
             portals.forEachIndexed { i, p ->
-                // Host menolak row non-browsable tanpa distance span. Span ditempel lewat
-                // SpannableString (CarSpan itu CharacterStyle); CarText.create(CharSequence)
-                // mengekstrak span-nya. Sendiri, CarText nggak punya overload varargs span.
+                // The host rejects a non-browsable row without a distance span. The span is attached
+                // through SpannableString (CarSpan is a CharacterStyle); CarText.create(CharSequence)
+                // extracts it. CarText has no varargs-span overload of its own.
                 val titleText = SpannableString(p.name)
                 titleText.setSpan(
                     DistanceSpan.create(
@@ -58,7 +58,7 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
                     Row.Builder()
                         .setTitle(CarText.create(titleText))
                         .addText("L${p.level} · ${p.team}")
-                        // Marker di peta host berasal dari Metadata -> Place, bukan dari daftar itu sendiri.
+                        // Markers on the host map come from Metadata -> Place, not from the list itself.
                         .setMetadata(Metadata.Builder().setPlace(places[i]).build())
                         .build()
                 )
@@ -69,7 +69,7 @@ class ProbeScreen(carContext: CarContext) : Screen(carContext) {
             .setTitle("Portal Probe")
             .setHeaderAction(Action.APP_ICON)
             .setCurrentLocationEnabled(true)
-            // Perhatian: setAnchor() minta Place (bukan CarLocation) di Car App 1.7.
+            // Note: in Car App 1.7 setAnchor() wants a Place (not a CarLocation).
             .setAnchor(places.first())
             .setItemList(rows)
             .build()

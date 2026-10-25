@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# scripts/create-aaos-avd.sh — bikin AVD Android Automotive OS + jalankan emulatornya.
-# Dipakai kalau mau "head unit virtual" tanpa HP/mobil (fokus tes render template, bukan Android Auto projection).
+# scripts/create-aaos-avd.sh — create an Android Automotive OS AVD and run its emulator.
+# Used when a "virtual head unit" is needed without a phone/car (tests template rendering, not Android Auto projection).
 set -e
 
 source "$(dirname "$0")/env.sh" >/dev/null
@@ -12,18 +12,18 @@ IMAGE="system-images;android-35-ext15;android-automotive-playstore;x86_64"
 AVD_NAME="aaos35"
 
 if [ ! -d "$SDK/system-images/android-35-ext15/android-automotive-playstore/x86_64" ]; then
-  echo "== image AAOS belum ada. Jalankan dulu: bash -c \"$PWD/scripts/install-aaos-image.bat\" =="
+  echo "== AAOS image is missing. Run this first: bash -c \"$PWD/scripts/install-aaos-image.bat\" =="
   exit 1
 fi
 
 if "$EMULATOR" -list-avds 2>/dev/null | grep -qx "$AVD_NAME"; then
-  echo "AVD '$AVD_NAME' sudah ada"
+  echo "AVD '$AVD_NAME' already exists"
 else
-  echo "== bikin AVD $AVD_NAME =="
+  echo "== creating AVD $AVD_NAME =="
   echo no | "$AVDMANAGER" create avd -n "$AVD_NAME" -k "$IMAGE" -d automotive_1024p_landscape --force
 fi
 
-echo "== boot emulator (butuh beberapa menit; AVD ini lambat) =="
+echo "== booting the emulator (takes a few minutes; this AVD is slow) =="
 "$EMULATOR" -avd "$AVD_NAME" -no-snapshot-save -gpu auto &
-echo "PID emulator: $!"
-echo "Setelah boot: adb wait-for-device; lalu install APK probe dan cari 'Portal Probe' di car launcher."
+echo "emulator PID: $!"
+echo "After boot: adb wait-for-device; then install the probe APK and look for 'Portal Probe' in the car launcher."

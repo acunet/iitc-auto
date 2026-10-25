@@ -6,7 +6,7 @@ local.properties
 *.aab
 captures/
 
-# Signing — JANGAN pernah masuk repo
+# Signing — NEVER commit these to the repo
 *.jks
 *.keystore
 keystore.properties
@@ -21,15 +21,15 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# Scratch / probe artefak
+# Scratch / probe artifacts
 /tmp/
 *.log
 
-# Dependency Node (dipakai build.py buat bundling userscript IITC)
+# Node dependencies (used by build.py to bundle the IITC userscripts)
 node_modules/
 
-# Asset hasil generate `python build.py mobile` (userscript + plugin IITC).
-# Jangan di-commit: 1,5 MB per build dan selalu bisa diregenerate.
-# CATATAN: iitc-auto-bridge.js TIDAK diabaikan — itu kode kita sendiri, bukan hasil generate.
+# Generated assets from `python build.py mobile` (IITC userscript + plugins).
+# Do not commit: 1.5 MB per build and always regenerable.
+# NOTE: iitc-auto-bridge.js is NOT ignored — it is our own code, not generated output.
 mobile/app/src/main/assets/total-conversion-build.user.js
 mobile/app/src/main/assets/plugins/

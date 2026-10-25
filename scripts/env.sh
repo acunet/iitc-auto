@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Sumber file ini sebelum build:  source scripts/env.sh
+# Source this file before building:  source scripts/env.sh
 #
-# Kenapa dua format path dipakai:
-#  - JAVA_HOME/ANDROID_HOME buat native tool (java, gradlew) => format Windows "C:/..."
-#  - entri PATH harus format MSYS "/c/..." karena bash di host ini pakai ':' sebagai
-#    separator, jadi "C:/..." akan pecah jadi dua entri ("C" + "/Program Files/...").
+# Why two path formats are used:
+#  - JAVA_HOME/ANDROID_HOME are for native tools (java, gradlew) => Windows "C:/..." format
+#  - PATH entries must use the MSYS "/c/..." format because bash on this host uses ':' as its
+#    separator, so "C:/..." would be split into two entries ("C" + "/Program Files/...").
 
 export JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.12.101-hotspot"
 export ANDROID_HOME="C:/Users/mansu/AppData/Local/Android/Sdk"

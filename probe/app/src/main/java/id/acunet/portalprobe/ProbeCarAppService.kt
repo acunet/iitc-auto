@@ -8,7 +8,7 @@ import androidx.car.app.SessionInfo
 import androidx.car.app.validation.HostValidator
 
 class ProbeCarAppService : CarAppService() {
-    // ALLOW_ALL_HOSTS_VALIDATOR hanya wajar untuk build debug yang di-sideload.
+    // ALLOW_ALL_HOSTS_VALIDATOR is only acceptable for a debug build that gets sideloaded.
     override fun createHostValidator(): HostValidator =
         HostValidator.ALLOW_ALL_HOSTS_VALIDATOR
 

@@ -65,9 +65,9 @@ public class IITC_DebugHistoryTest {
         history.push("text3");
         history.push("text4");
         history.display();
-        // CATATAN (fork IITC Auto): implementasinya memakai System.lineSeparator(),
-        // jadi di Windows akhir barisnya CR LF. Versi upstream menulis LF saja secara
-        // hardcoded sehingga test ini selalu gagal di Windows.
+        // NOTE (IITC Auto fork): the implementation uses System.lineSeparator(),
+        // so on Windows the line ending is CR LF. The upstream version writes a bare LF
+        // hardcoded, which makes this test always fail on Windows.
         assertEquals("text4 text3 " + System.lineSeparator(), outContent.toString());
     }
 

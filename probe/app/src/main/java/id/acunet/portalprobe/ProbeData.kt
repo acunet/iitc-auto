@@ -1,8 +1,8 @@
 package id.acunet.portalprobe
 
 /**
- * Data dummy buat Gate 0a (head unit mau nampilin app AA sideload atau nggak).
- * Throwaway: dibuang setelah gate lulus.
+ * Dummy data for Gate 0a (does the head unit want to show a sideloaded AA app or not).
+ * Throwaway: delete once the gate has passed.
  */
 data class ProbePortal(
     val name: String,
@@ -14,7 +14,7 @@ data class ProbePortal(
 )
 
 object ProbeData {
-    // Tiga titik di sekitar Monas / Jakarta Pusat — cukup buat ngecek marker + warna faction.
+    // Three points around Monas / Central Jakarta — enough to check markers + faction colours.
     val PROBE_PORTALS = listOf(
         ProbePortal("Probe · Monas Selatan", -6.17650, 106.82710, "R", 8, 210),
         ProbePortal("Probe · Gambir Station", -6.17670, 106.83070, "E", 6, 640),

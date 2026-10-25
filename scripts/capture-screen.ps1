@@ -1,5 +1,5 @@
-# scripts/capture-screen.ps1 — screenshot seluruh layar ke file PNG.
-# Dipakai buat ngambil gambar jendela Desktop Head Unit (head unit virtual) di PC.
+# scripts/capture-screen.ps1 — screenshot the entire screen to a PNG file.
+# Used to grab an image of the Desktop Head Unit window (virtual head unit) on the PC.
 #   powershell -ExecutionPolicy Bypass -File scripts/capture-screen.ps1 -Path C:/Users/mansu/dev/tools/shot.png
 param([string]$Path = "C:/Users/mansu/dev/tools/shot.png")
 
@@ -14,4 +14,4 @@ $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
 $gfx.Dispose()
 $bmp.Dispose()
 
-Write-Output ("screenshot tersimpan: " + $Path + " (" + $bounds.Width + "x" + $bounds.Height + ")")
+Write-Output ("screenshot saved: " + $Path + " (" + $bounds.Width + "x" + $bounds.Height + ")")

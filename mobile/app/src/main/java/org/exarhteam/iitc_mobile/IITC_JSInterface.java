@@ -126,13 +126,13 @@ public class IITC_JSInterface {
     }
 
     /**
-     * Bridge Android Auto: sunting userscript dari asset setelah IITC selesai boot,
-     * supaya nggak perlu install plugin manual dan versinya selalu sejalan dengan APK.
+     * Bridge Android Auto: inject the userscript from the asset once IITC has finished booting,
+     * so no manual plugin install is needed and its version always tracks the APK.
      */
     private void injectAutoBridge() {
         final String script = readAsset("iitc-auto-bridge.js");
         if (script == null) {
-            Log.d("bridge: asset iitc-auto-bridge.js nggak ada, layar mobil nggak akan dapat data");
+            Log.d("bridge: asset iitc-auto-bridge.js is missing, the car screen will not get any data");
             return;
         }
         mIitc.getWebView().evaluateJavascript(script, null);
@@ -149,18 +149,18 @@ public class IITC_JSInterface {
             }
             return buffer.toString(StandardCharsets.UTF_8.name());
         } catch (Throwable t) {
-            Log.w("bridge: gagal baca asset " + name + " -> " + t);
+            Log.w("bridge: failed to read asset " + name + " -> " + t);
             return null;
         }
     }
 
     /**
-     * Dipanggil userscript bridge: app.sendPortals(json).
-     * Data cuma diterima kalau datang dari halaman intel map dan payload-nya valid.
+     * Called by the bridge userscript: app.sendPortals(json).
+     * Data is only accepted when it comes from the intel map page and its payload is valid.
      *
-     * PENTING: jangan panggil API WebView apa pun di sini. Method ini jalan di thread JS bridge,
-     * dan memanggil WebView.getUrl() dari thread itu bikin deadlock (kejadian nyata saat uji).
-     * URL-nya di-cache oleh IITC_WebViewClient.onPageFinished di UI thread.
+     * IMPORTANT: do not call any WebView API here. This method runs on the JS bridge thread,
+     * and calling WebView.getUrl() from that thread deadlocks (happened for real during testing).
+     * The URL is cached by IITC_WebViewClient.onPageFinished on the UI thread.
      */
     @JavascriptInterface
     public void sendPortals(final String json) {
@@ -170,12 +170,12 @@ public class IITC_JSInterface {
             final org.exarhteam.iitc_mobile.car.PortalSnapshot snapshot =
                     PortalBridge.INSTANCE.getSnapshot().getValue();
             final int count = snapshot == null ? 0 : snapshot.getPortals().size();
-            // Log sukses ini penting: satu-satunya cara memastikan data portal beneran nyampe
-            // ke sisi native tanpa harus lihat layar mobil.
-            Log.d("bridge: payload portal diterima (" + count + " portal, "
+            // This success log matters: it is the only way to confirm that portal data really
+            // reaches the native side without having to look at the car screen.
+            Log.d("bridge: portal payload accepted (" + count + " portal, "
                     + (json != null ? json.length() : 0) + " char)");
         } else {
-            Log.d("bridge: payload portal ditolak -> " + PortalBridge.INSTANCE.getLastRejection().getValue());
+            Log.d("bridge: portal payload rejected -> " + PortalBridge.INSTANCE.getLastRejection().getValue());
         }
     }
 

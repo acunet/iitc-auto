@@ -1,54 +1,54 @@
-# Rencana dua-mode: IITC asli saat parked, marker saat nyetir
+# Two-mode plan: real IITC while parked, markers while driving
 
-Tanggal: 2026-10-25
-Status: keputusan diambil setelah user bilang maunya "UI kaya intel.ingress.com / IITC sendiri,
-asal bisa jalan di mobil Jaecoo lewat Android Auto".
+Date: 2026-10-25
+Status: decision made after the user said they wanted "a UI as rich as intel.ingress.com / IITC itself,
+as long as it can run in the Jaecoo car through Android Auto".
 
-## Kenapa perlu dua mode
+## Why two modes are needed
 
-Android Auto **nggak bisa** menampilkan UI bebas (WebView) sambil mobil jalan — kalau bisa,
-Google sendiri bilang itu distraksi. Aturan yang berlaku (dari dokumentasi resmi):
+Android Auto **can't** show a free-form UI (WebView) while the car is moving — if it could, Google
+itself says that would be a distraction. The rules that apply (from the official docs):
 
-| Kondisi mobil | Yang boleh tampil | Yang bisa kita sajikan |
+| Car state | What may be shown | What we can offer |
 |---|---|---|
-| **Jalan** | Template Car App Library saja | Peta marker portal (POI + `PlaceListMapTemplate`) — sudah terbukti render |
-| **Berhenti (parked)** | Activity milik app, full screen, UI bebas | **IITC asli (WebView) fullscreen di layar mobil** |
+| **Driving** | Car App Library templates only | Portal marker map (POI + `PlaceListMapTemplate`) — rendering already proven |
+| **Stopped (parked)** | An activity owned by the app, full screen, free-form UI | **Real IITC (WebView) fullscreen on the car screen** |
 
-Dasar hukumnya (training/cars/parked/auto): "On devices running Android 15 or higher, Android Auto
-supports running apps in supported parked app categories directly on the head unit" — dan cara
-mendaftarkannya cukup menaruh `<category android:name="android.intent.category.CAR_LAUNCHER"/>`
-di intent-filter sebuah activity. Android Auto otomatis **mengeluarkan app begitu mobil bergerak**
-(parked = hanya saat berhenti).
+The legal basis (training/cars/parked/auto): "On devices running Android 15 or higher, Android Auto
+supports running apps in supported parked app categories directly on the head unit" — and registering it
+is enough to put `<category android:name="android.intent.category.CAR_LAUNCHER"/>`
+in an activity's intent-filter. Android Auto automatically **dismisses the app as soon as the car moves**
+(parked = only while stopped).
 
-## Yang sudah dikerjakan
+## What has been done
 
-1. `mobile/app/src/main/AndroidManifest.xml` (fork IITC Mobile): kategori `CAR_LAUNCHER` ditambahkan
-   ke intent-filter activity utama `IITC_Mobile`. Activity itu **tidak** punya
-   `distractionOptimized=true`, sesuai syarat supaya sistem menghentikannya saat mobil jalan.
-   Sudah diverifikasi masuk ke APK (`aapt2 dump xmltree` → `android.intent.category.CAR_LAUNCHER`).
-2. APK fork (debug) sudah dibangun ulang dan di-install ke HP user (SM-A546E, Android 16).
+1. `mobile/app/src/main/AndroidManifest.xml` (IITC Mobile fork): the `CAR_LAUNCHER` category was added
+   to the intent-filter of the main activity `IITC_Mobile`. That activity does **not** have
+   `distractionOptimized=true`, as required so the system stops it while the car is moving.
+   Verified as present in the APK (`aapt2 dump xmltree` → `android.intent.category.CAR_LAUNCHER`).
+2. The fork APK (debug) has been rebuilt and installed on the user's phone (SM-A546E, Android 16).
 
-Artinya: **belum ada kode fitur baru** — cuma satu baris manifest yang mengubah IITC Mobile jadi
-app Android Auto parked. Kalau host AA menerima, layar mobil akan menampilkan IITC apa adanya
-(peta + plugin-nya) saat mobil berhenti.
+Which means: **there's no new feature code yet** — just one manifest line that turns IITC Mobile into an
+Android Auto parked app. If the AA host accepts it, the car screen will show IITC as-is
+(map + its plugins) while the car is stopped.
 
-## Batasan yang harus diterima (jujur)
+## Limitations to accept (honestly)
 
-- **Parked-only.** Begitu mobil jalan, Android Auto mengeluarkan app-nya. Jadi ini bukan pengganti
-  mode nyetir, tapi pelengkap: berhenti di titik ops → buka IITC di layar 14.8" mobil.
-- **Nggak bisa masuk Play Store.** Kategori "browsers" cuma didukung di Android Automotive OS,
-  nggak di Android Auto; ini murni sideload (pola yang sama dipakai app AAAD seperti AA Browser).
-- **Belum diverifikasi empiris.** Apakah host AA mau menampilkan app sideload berkategori parked ini
-  harus dibuktikan lewat DHU atau langsung di Jaecoo. Kalau host nolak, jalur ini mati dan yang
-  tersisa cuma mode template (marker).
-- **IITC = pelanggaran ToS Ingress** (lihat spec §7). Berjalan di layar mobil nggak mengubah itu.
+- **Parked-only.** As soon as the car moves, Android Auto dismisses the app. So this isn't a replacement
+  for driving mode, it's a complement: stop at an op → open IITC on the car's 14.8" screen.
+- **Can't get into the Play Store.** The "browsers" category is only supported on Android Automotive OS,
+  not on Android Auto; this is pure sideload (the same pattern used by AAAD apps like AA Browser).
+- **Not yet verified empirically.** Whether the AA host is willing to show this parked-category sideloaded
+  app has to be proven via DHU or directly in the Jaecoo. If the host refuses, this path is dead and all
+  that's left is template mode (markers).
+- **IITC = an Ingress ToS violation** (see spec §7). Running it on a car screen doesn't change that.
 
-## Cara verifikasi
+## How to verify
 
-1. Di HP: Android Auto → **Developer settings** → aktifkan **Developer mode** → **Start head unit server**
-   (server ini mati tiap kali AA restart; harus dinyalakan lagi tiap sesi tes).
-2. Di PC: `source scripts/env.sh && adb -s <serial> forward tcp:5277 tcp:5277`
-   lalu jalankan `desktop-head-unit.exe` (stdin harus dijaga hidup — script DHU kita memakai
-   `sleep 3600 |` karena DHU keluar begitu stdin EOF).
-3. Cek launcher AA di jendela DHU: harus muncul **IITC Mobile** dengan badge "P" (parked).
-4. Tap → kalau IITC (peta portal) muncul fullscreen, jalur parked ini **terbukti**.
+1. On the phone: Android Auto → **Developer settings** → enable **Developer mode** → **Start head unit server**
+   (this server dies every time AA restarts; it has to be turned on again for each test session).
+2. On the PC: `source scripts/env.sh && adb -s <serial> forward tcp:5277 tcp:5277`
+   then run `desktop-head-unit.exe` (stdin must be kept alive — our DHU script uses
+   `sleep 3600 |` because DHU exits as soon as stdin hits EOF).
+3. Check the AA launcher in the DHU window: **IITC Mobile** should appear with a "P" (parked) badge.
+4. Tap → if IITC (portal map) shows up fullscreen, this parked path is **proven**.

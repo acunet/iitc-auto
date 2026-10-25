@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Deklarasi app mobil buat fork IITC Mobile.
-  "template" = app templated (kategori POI): host Android Auto yang menggambar UI-nya.
+  Car app declaration for the IITC Mobile fork.
+  "template" = templated app (POI category): the Android Auto host draws its UI.
 -->
 <automotiveApp>
     <uses name="template" />

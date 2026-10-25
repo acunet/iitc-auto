@@ -1,11 +1,11 @@
 package org.exarhteam.iitc_mobile.car
 
 /**
- * Model data portal yang dipakai layar Android Auto.
- * Semua kelas di file ini murni (tanpa dependency Android) supaya bisa diuji di JVM.
+ * Portal data model used by the Android Auto screens.
+ * Every class in this file is pure (no Android dependency) so it can be unit tested on the JVM.
  */
 
-/** Faksi portal; kode mentahnya datang dari data IITC ('R'/'E'/'M'/'N'). */
+/** Portal faction; the raw code comes from IITC data ('R'/'E'/'M'/'N'). */
 enum class Faction(val code: String) {
     RESISTANCE("R"),
     ENLIGHTENED("E"),
@@ -37,7 +37,7 @@ data class BoundingBox(
         lat in south..north && lng in west..east
 
     companion object {
-        /** Terima array [south, west, north, east] dari payload; null kalau bentuknya salah. */
+        /** Accepts a [south, west, north, east] array from the payload; null if the shape is wrong. */
         fun fromArray(values: List<Double>?): BoundingBox? {
             if (values == null || values.size != 4) return null
             val (s, w, n, e) = values
@@ -58,9 +58,9 @@ data class Portal(
 )
 
 /**
- * Satu kiriman data dari WebView IITC.
- * `receivedAtMs` = kapan app menerimanya (dipakai buat nandain data basi),
- * `capturedAtMs` = kapan IITC mengambil datanya (informasi dari payload).
+ * A single data push from the IITC WebView.
+ * `receivedAtMs` = when the app received it (used to flag stale data),
+ * `capturedAtMs` = when IITC captured the data (comes from the payload).
  */
 data class PortalSnapshot(
     val receivedAtMs: Long,
@@ -75,7 +75,7 @@ data class PortalSnapshot(
         ageSeconds(nowMs) >= STALE_AFTER_SECONDS
 
     companion object {
-        /** Setelah 2 menit tanpa kiriman baru, data dianggap basi dan ditandai di layar. */
+        /** After 2 minutes with no new push, the data is considered stale and is flagged on screen. */
         const val STALE_AFTER_SECONDS = 120L
     }
 }

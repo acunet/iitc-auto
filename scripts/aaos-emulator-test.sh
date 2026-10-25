@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# scripts/aaos-emulator-test.sh — head unit virtual (Android Automotive OS) tanpa HP/mobil.
+# scripts/aaos-emulator-test.sh — virtual head unit (Android Automotive OS) without a phone/car.
 #
-# Alur: pastikan image ada -> bikin AVD (via .bat karena ';') -> boot emulator ->
-#       tunggu boot selesai -> install APK probe.
+# Flow: make sure the image exists -> create the AVD (via .bat because of ';') -> boot the emulator ->
+#       wait for boot to finish -> install the probe APK.
 #
-# CATATAN JUJUR: ini runtime AAOS (OS mobil tertanam), BUKAN Android Auto projection
-# seperti di Jaecoo. Cocok buat ngecek template POI + marker dirender atau nggak,
-# bukan bukti bahwa AA di mobil bakal nampilin app sideload ini.
+# HONEST NOTE: this is the AAOS runtime (embedded car OS), NOT Android Auto projection
+# like in the Jaecoo. It is good for checking whether the POI template + markers render,
+# not proof that AA in a real car will show this sideloaded app.
 set -e
 
 source "$(dirname "$0")/env.sh" >/dev/null
@@ -20,38 +20,38 @@ APK="$REPO/probe/app/build/outputs/apk/debug/app-debug.apk"
 APK_WIN="C:/Users/mansu/dev/iitc-auto/probe/app/build/outputs/apk/debug/app-debug.apk"  # adb = native tool
 
 if [ ! -d "$IMAGE_DIR" ]; then
-  echo "Image AAOS belum ada. Jalankan: bash -c \"$REPO/scripts/install-aaos-image.bat\""
+  echo "AAOS image not present yet. Run: bash -c \"$REPO/scripts/install-aaos-image.bat\""
   exit 1
 fi
 
 if ! "$EMULATOR" -list-avds 2>/dev/null | grep -qx "$AVD_NAME"; then
-  echo "== bikin AVD $AVD_NAME =="
+  echo "== creating AVD $AVD_NAME =="
   bash -c "$REPO/scripts/create-aaos-avd.bat"
 fi
 "$EMULATOR" -list-avds
 
-# Sudah ada emulator jalan? Pakai itu.
+# Is an emulator already running? Use that one.
 if adb devices | grep -q '^emulator-'; then
-  echo "emulator sudah jalan"
+  echo "emulator already running"
 else
-  echo "== boot emulator (AAOS lambat; tunggu sampai boot_completed=1) =="
+  echo "== booting emulator (AAOS is slow; wait until boot_completed=1) =="
   "$EMULATOR" -avd "$AVD_NAME" -no-snapshot-save -no-boot-anim -gpu auto -netdelay none -netspeed full > "$REPO/aaos-emulator.log" 2>&1 &
-  echo "PID emulator: $!"
+  echo "emulator PID: $!"
 fi
 
 DEV=""
 for i in $(seq 1 60); do
   DEV=$(adb devices | awk '/^emulator-/ {print $1; exit}')
   if [ -n "$DEV" ] && [ "$(adb -s "$DEV" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
-    echo "boot selesai: $DEV"; break
+    echo "boot finished: $DEV"; break
   fi
-  echo "  ...nunggu boot ($i)"; sleep 10
+  echo "  ...waiting for boot ($i)"; sleep 10
 done
 
-if [ -z "$DEV" ]; then echo "GAGAL: emulator nggak boot"; tail -20 "$REPO/aaos-emulator.log"; exit 1; fi
+if [ -z "$DEV" ]; then echo "FAILED: emulator did not boot"; tail -20 "$REPO/aaos-emulator.log"; exit 1; fi
 
-echo "== install APK probe ke $DEV =="
+echo "== installing probe APK on $DEV =="
 adb -s "$DEV" install -r "$APK_WIN"
 adb -s "$DEV" shell pm list packages | grep portalprobe
 echo
-echo "Screenshot layar head unit:  adb -s $DEV exec-out screencap -p > shot.png"
+echo "Head unit screen screenshot:  adb -s $DEV exec-out screencap -p > shot.png"

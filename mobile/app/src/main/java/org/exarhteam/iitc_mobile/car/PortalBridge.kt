@@ -5,24 +5,24 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Titik temu sisi HP (WebView IITC) dan sisi mobil (CarAppService).
+ * Meeting point between the phone side (IITC WebView) and the car side (CarAppService).
  *
- * Alirannya in-process dan nggak lewat file/IPC: userscript di dalam WebView memanggil
- * `app.sendPortals(json)` -> IITC_JSInterface -> [accept] -> StateFlow -> layar mobil.
- * Karena semuanya satu proses, nggak ada izin storage yang dibutuhkan dan nggak ada
- * request tambahan ke intel.ingress.com.
+ * The flow is in-process and never goes through a file/IPC: the userscript inside the WebView calls
+ * `app.sendPortals(json)` -> IITC_JSInterface -> [accept] -> StateFlow -> car screen.
+ * Since it is all one process, no storage permission is needed and no extra request is made
+ * to intel.ingress.com.
  */
 object PortalBridge {
 
     private val _snapshot = MutableStateFlow<PortalSnapshot?>(null)
 
-    /** Kiriman terakhir yang valid; null = belum ada data sama sekali. */
+    /** Last valid push; null = no data at all yet. */
     val snapshot: StateFlow<PortalSnapshot?> = _snapshot.asStateFlow()
 
     /**
-     * URL halaman WebView saat ini, di-cache dari UI thread (IITC_WebViewClient.onPageFinished).
-     * Sengaja disimpan, bukan dibaca dari WebView saat bridge dipanggil: WebView API tidak boleh
-     * dipanggil dari thread JS bridge (deadlock).
+     * Current WebView page URL, cached from the UI thread (IITC_WebViewClient.onPageFinished).
+     * Deliberately stored instead of read from the WebView when the bridge is called: WebView APIs
+     * must not be called from the JS bridge thread (deadlock).
      */
     @Volatile
     private var currentUrl: String? = null
@@ -35,16 +35,16 @@ object PortalBridge {
 
     private val _lastRejection = MutableStateFlow<String?>(null)
 
-    /** Alasan penolakan terakhir (buat debug/status di layar). */
+    /** Reason for the last rejection (for debugging / on-screen status). */
     val lastRejection: StateFlow<String?> = _lastRejection.asStateFlow()
 
     /**
-     * Dipanggil dari WebView. Ditolak (return false) kalau payload nggak valid / datang dari
-     * halaman yang bukan intel map.
+     * Called from the WebView. Rejected (returns false) when the payload is invalid or comes from
+     * a page that is not the intel map.
      */
     fun accept(json: String?, sourceUrl: String?): Boolean {
         if (!isTrustedSource(sourceUrl)) {
-            _lastRejection.value = "ditolak: sumber bukan intel.ingress.com (${sourceUrl ?: "null"})"
+            _lastRejection.value = "rejected: source is not intel.ingress.com (${sourceUrl ?: "null"})"
             return false
         }
         return when (val result = PortalJsonParser.parse(json)) {
@@ -65,9 +65,9 @@ object PortalBridge {
     }
 
     /**
-     * hanya halaman intel map yang boleh mengirim data. Pencocokan host harus persis
-     * "ingress.com" atau subdomainnya — "evil-ingress.com" juga berakhiran "ingress.com"
-     * dan itu jenis kelonggaran yang bikin bridge bisa disalahgunakan.
+     * Only intel map pages may push data. The host match must be exactly "ingress.com" or one of
+     * its subdomains — "evil-ingress.com" also ends with "ingress.com", and that kind of lax
+     * matching is what lets a bridge be abused.
      */
     fun isTrustedSource(url: String?): Boolean {
         val host = url

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # scripts/bootstrap-gradle.sh
-# Mesin ini nggak punya `gradle` di PATH. Unduh distribusi Gradle 8.13 sekali
-# (di luar repo) supaya bisa generate wrapper yang nanti di-commit.
+# This machine has no `gradle` on PATH. Download the Gradle 8.13 distribution once
+# (outside the repo) so a wrapper can be generated and then committed.
 set -e
 
 TOOLS="/c/Users/mansu/dev/tools"
-TOOLS_WIN="C:/Users/mansu/dev/tools"   # curl itu native tool: butuh path Windows
+TOOLS_WIN="C:/Users/mansu/dev/tools"   # curl is a native tool: it needs a Windows path
 DIST="$TOOLS/gradle-8.13"
 mkdir -p "$TOOLS"
 

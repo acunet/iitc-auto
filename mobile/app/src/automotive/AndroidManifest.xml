@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Manifest khusus flavor `automotive` (Android Automotive OS / head unit terpasang).
+  Manifest specific to the `automotive` flavor (Android Automotive OS / built-in head unit).
 
-  Kenapa perlu: di AAOS, app template dibuka lewat car launcher, dan car launcher hanya
-  menampilkan app di grid kalau ada activity dengan filter LAUNCHER. Kalau activity biasa milik
-  IITC yang dipakai (punya filter LAUNCHER), car launcher malah membuka UI IITC-nya, bukan
-  template CarAppService. Karena itu di flavor ini activity IITC dikecualikan dari filter
-  LAUNCHER (lihat src/automotive/AndroidManifest.xml + tools:node pada manifest utama tidak
-  dipakai; pengecualian dilakukan dengan manifest ini hanya MENAMBAH CarAppActivity).
+  Why it is needed: on AAOS a templated app is opened through the car launcher, and the car launcher
+  only lists an app in the grid if there is an activity with a LAUNCHER filter. If IITC's regular
+  activity were the one used (it has a LAUNCHER filter), the car launcher would open IITC's own UI
+  instead of the CarAppService template. Therefore in this flavor the IITC activity is excluded from
+  the LAUNCHER filter (see src/automotive/AndroidManifest.xml; tools:node on the main manifest is not
+  used; the exclusion is done by this manifest only ADDING CarAppActivity).
 
-  Catatan: activity IITC_Mobile di manifest utama tetap punya filter LAUNCHER. Di AAOS itu berarti
-  akan ada dua entri: satu membuka UI IITC, satu (CarAppActivity) membuka template mobil.
-  Itu perilaku yang diinginkan untuk varian uji ini.
+  Note: the IITC_Mobile activity in the main manifest still has a LAUNCHER filter. On AAOS that means
+  there will be two entries: one opening the IITC UI, one (CarAppActivity) opening the car template.
+  That is the intended behavior for this test variant.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

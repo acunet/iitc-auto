@@ -10,9 +10,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
-    <!-- Mode nyetir di Android Auto: kategori POI cuma boleh minta MAP_TEMPLATES.
-         Jangan tambah NAVIGATION_TEMPLATES/ACCESS_SURFACE (itu kategori Navigation,
-         yang wajib punya turn-by-turn). -->
+    <!-- Driving mode in Android Auto: an app in the POI category may only request MAP_TEMPLATES.
+         Do not add NAVIGATION_TEMPLATES/ACCESS_SURFACE (those belong to the Navigation
+         category, which is required to have turn-by-turn). -->
     <uses-permission android:name="androidx.car.app.MAP_TEMPLATES" />
 
     <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
@@ -79,14 +79,15 @@
                 <!-- Used for Samsung Multi-Window support -->
                 <category android:name="android.intent.category.MULTIWINDOW_LAUNCHER"/>
 
-                <!-- ANDROID AUTO (parked app): bikin IITC ini bisa dijalankan LANGSUNG di
-                     layar head unit Android Auto secara fullscreen, alias IITC asli (WebView)
-                     kelihatan di layar mobil. Syarat resmi Google (training/cars/parked/auto):
-                     cukup kategori ini di intent-filter sebuah activity, dan activity TIDAK
-                     boleh punya meta-data distractionOptimized=true supaya sistem otomatis
-                     menghentikannya begitu mobil jalan (mode parked = hanya saat berhenti).
-                     Butuh HP Android 15+; di HP ini Android 16. Distribusi Play nggak mungkin
-                     (kategori browser nggak didukung di Android Auto) — ini murni sideload. -->
+                <!-- ANDROID AUTO (parked app): makes IITC runnable DIRECTLY, fullscreen, on the
+                     Android Auto head unit screen — i.e. the real IITC (WebView) shows up on the
+                     car screen. Google's official requirements (training/cars/parked/auto): this
+                     category in an activity's intent-filter is enough, and the activity must NOT
+                     have the distractionOptimized=true meta-data so the system stops it
+                     automatically as soon as the car moves (parked mode = only while stationary).
+                     Requires an Android 15+ phone; this one is Android 16. Play distribution is
+                     impossible (the browser category is not supported on Android Auto) — this is
+                     purely sideloaded. -->
                 <category android:name="android.intent.category.CAR_LAUNCHER"/>
             </intent-filter>
 
@@ -261,20 +262,20 @@
             </intent-filter>
         </receiver>
 
-        <!-- ============ Layer Android Auto (mode nyetir) ============ -->
+        <!-- ============ Android Auto layer (driving mode) ============ -->
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
 
-        <!-- WAJIB: tanpa ini host templated menolak app dengan
+        <!-- REQUIRED: without this the templated host rejects the app with
              "Min API level not declared in manifest (androidx.car.app.minCarApiLevel)".
-             1 = cukup untuk PlaceListMapTemplate. -->
+             1 = enough for PlaceListMapTemplate. -->
         <meta-data
             android:name="androidx.car.app.minCarApiLevel"
             android:value="1" />
 
-        <!-- CarAppService: sumber data portal dikirim dari WebView IITC lewat
-             app.sendPortals(json) -> PortalBridge -> layar mobil (PlaceListMapTemplate). -->
+        <!-- CarAppService: portal data is sent from the IITC WebView via
+             app.sendPortals(json) -> PortalBridge -> car screen (PlaceListMapTemplate). -->
         <service
             android:name="org.exarhteam.iitc_mobile.car.IitcCarAppService"
             android:exported="true">

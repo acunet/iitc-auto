@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Manifest khusus flavor `automotive` (Android Automotive OS).
+  Manifest that applies to the `automotive` flavour only (Android Automotive OS).
 
-  CarAppActivity adalah entry point yang dipakai car launcher AAOS: app kelihatan di
-  app grid, dan saat di-tap host langsung membuka CarAppService kita sebagai
-  templated car app. Di flavor `projected` (Android Auto) entry point ini nggak
-  dipakai sama sekali — APK project di-klaim lewat CarAppService + "Unknown sources".
+  CarAppActivity is the entry point the AAOS car launcher uses: the app appears in the
+  app grid and, when tapped, the host opens our CarAppService as a templated car app.
+  The `projected` flavour (Android Auto) does not use this entry point at all — there the
+  APK is claimed through CarAppService + "Unknown sources".
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

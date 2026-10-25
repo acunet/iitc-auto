@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Test parser payload bridge + logika pemilihan portal + validasi sumber. */
+/** Tests the bridge payload parser + portal selection logic + source validation. */
 class PortalBridgeTest {
 
     private val validPayload = """
@@ -24,7 +24,7 @@ class PortalBridgeTest {
     """.trimIndent()
 
     @Test
-    fun `payload valid diparse lengkap`() {
+    fun `valid payload is parsed in full`() {
         val result = PortalJsonParser.parse(validPayload, receivedAtMs = 42L)
         assertTrue(result is ParseResult.Success)
         val snapshot = (result as ParseResult.Success).snapshot
@@ -37,45 +37,45 @@ class PortalBridgeTest {
         assertEquals(Faction.NEUTRAL, snapshot.portals[2].faction)
         assertEquals(8, snapshot.portals[0].level)
         assertEquals(87, snapshot.portals[0].health)
-        assertNull("portal tanpa hp harus null", snapshot.portals[2].health)
+        assertNull("a portal without hp must be null", snapshot.portals[2].health)
         assertNotNull(snapshot.bbox)
         assertEquals(-6.175, snapshot.bbox!!.centerLat, 0.0001)
     }
 
     @Test
-    fun `payload kosong atau null ditolak`() {
+    fun `empty or null payload is rejected`() {
         assertTrue(PortalJsonParser.parse(null) is ParseResult.Failure)
         assertTrue(PortalJsonParser.parse("") is ParseResult.Failure)
         assertTrue(PortalJsonParser.parse("   ") is ParseResult.Failure)
     }
 
     @Test
-    fun `json rusak ditolak tanpa melempar exception`() {
-        val result = PortalJsonParser.parse("{ ini bukan json")
+    fun `malformed json is rejected without throwing an exception`() {
+        val result = PortalJsonParser.parse("{ this is not json")
         assertTrue(result is ParseResult.Failure)
     }
 
     @Test
-    fun `versi payload lain ditolak`() {
+    fun `a different payload version is rejected`() {
         val result = PortalJsonParser.parse("""{"v":99,"portals":[]}""")
         assertTrue(result is ParseResult.Failure)
-        assertTrue((result as ParseResult.Failure).reason.contains("versi"))
+        assertTrue((result as ParseResult.Failure).reason.contains("version"))
     }
 
     @Test
-    fun `payload kebesaran ditolak sebelum diparse`() {
+    fun `oversized payload is rejected before parsing`() {
         val huge = "x".repeat(PortalJsonParser.MAX_PAYLOAD_CHARS + 1)
         val result = PortalJsonParser.parse(huge)
         assertTrue(result is ParseResult.Failure)
-        assertTrue((result as ParseResult.Failure).reason.contains("melebihi batas"))
+        assertTrue((result as ParseResult.Failure).reason.contains("exceeds"))
     }
 
     @Test
-    fun `portal rusak dibuang tapi sisanya tetap masuk`() {
+    fun `broken portals are dropped but the rest still get through`() {
         val payload = """
             {"v":1,"portals":[
               {"g":"ok","n":"Bagus","lat":-6.2,"lng":106.8,"t":"R","l":5},
-              {"n":"tanpa guid","lat":-6.2,"lng":106.8},
+              {"n":"no guid","lat":-6.2,"lng":106.8},
               {"g":"koordinat-ngawur","lat":999,"lng":999},
               {"g":"ok2","n":"Bagus 2","lat":-6.21,"lng":106.81,"t":"E","l":3}
             ]}
@@ -87,7 +87,7 @@ class PortalBridgeTest {
     }
 
     @Test
-    fun `level di luar 1-8 dijepit, faction tak dikenal jadi UNKNOWN`() {
+    fun `levels outside 1-8 are clamped, an unknown faction becomes UNKNOWN`() {
         val payload = """{"v":1,"portals":[{"g":"a","n":"x","lat":-6.2,"lng":106.8,"t":"Z","l":42}]}"""
         val portal = (PortalJsonParser.parse(payload) as ParseResult.Success).snapshot.portals.first()
         assertEquals(8, portal.level)
@@ -95,39 +95,39 @@ class PortalBridgeTest {
     }
 
     @Test
-    fun `snapshot jadi basi setelah 120 detik`() {
+    fun `snapshot goes stale after 120 seconds`() {
         val snapshot = PortalSnapshot(receivedAtMs = 1_000_000L, capturedAtMs = 0L, bbox = null, portals = emptyList())
         assertFalse(snapshot.isStale(nowMs = 1_000_000L + 119_000L))
         assertTrue(snapshot.isStale(nowMs = 1_000_000L + 120_000L))
     }
 
     @Test
-    fun `target ops selalu ikut walau jauh, sisanya N terdekat`() {
+    fun `ops targets are always kept even when far, the rest are the N nearest`() {
         val portals = listOf(
-            portal("dekat-1", -6.2000, 106.8000),
-            portal("dekat-2", -6.2010, 106.8010),
-            portal("jauh-target", -6.9000, 106.9000),
-            portal("sedang", -6.2500, 106.8500),
+            portal("near-1", -6.2000, 106.8000),
+            portal("near-2", -6.2010, 106.8010),
+            portal("far-target", -6.9000, 106.9000),
+            portal("medium", -6.2500, 106.8500),
         )
         val selected = selectPortalsForDisplay(
             portals = portals,
-            targets = setOf("jauh-target"),
+            targets = setOf("far-target"),
             refLat = -6.2,
             refLng = 106.8,
             maxNearby = 2,
         )
-        assertEquals(listOf("jauh-target", "dekat-1", "dekat-2"), selected.map { it.guid })
+        assertEquals(listOf("far-target", "near-1", "near-2"), selected.map { it.guid })
     }
 
     @Test
-    fun `jarak haversine masuk akal`() {
-        // Monas ke Gambir kurang lebih 400 m
+    fun `haversine distance is plausible`() {
+        // Monas to Gambir is roughly 400 m
         val meters = Geo.distanceMeters(-6.17650, 106.82710, -6.17670, 106.83070)
-        assertTrue("jaraknya $meters m", meters in 350.0..450.0)
+        assertTrue("distance is $meters m", meters in 350.0..450.0)
     }
 
     @Test
-    fun `hanya halaman intel yang dianggap sumber tepercaya`() {
+    fun `only intel pages are treated as trusted sources`() {
         assertTrue(PortalBridge.isTrustedSource("https://intel.ingress.com/intel?ll=-6.2,106.8"))
         assertTrue(PortalBridge.isTrustedSource("https://intel.ingress.com"))
         assertFalse(PortalBridge.isTrustedSource("https://example.com/intel.ingress.com"))
@@ -136,7 +136,7 @@ class PortalBridgeTest {
     }
 
     @Test
-    fun `kiriman dari halaman lain ditolak walau payload valid`() {
+    fun `a push from another page is rejected even when the payload is valid`() {
         PortalBridge.clear()
         val accepted = PortalBridge.accept(validPayload, "https://example.com/")
         assertFalse(accepted)
@@ -144,7 +144,7 @@ class PortalBridgeTest {
     }
 
     @Test
-    fun `kiriman dari intel map diterima dan mengisi snapshot`() {
+    fun `a push from the intel map is accepted and fills the snapshot`() {
         PortalBridge.clear()
         val accepted = PortalBridge.accept(validPayload, "https://intel.ingress.com/intel")
         assertTrue(accepted)

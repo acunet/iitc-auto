@@ -7,7 +7,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Hitungan jarak + pemilihan portal yang ditampilkan. Murni, jadi bisa diuji di JVM. */
+/** Distance math + selection of the portals to display. Pure, so it can be unit tested on the JVM. */
 object Geo {
 
     private const val EARTH_RADIUS_M = 6_371_000.0
@@ -22,9 +22,9 @@ object Geo {
 }
 
 /**
- * Portal yang tampil: semua portal target ops (apa pun jaraknya) + [maxNearby] portal terdekat
- * dari titik acuan. Dipakai supaya daftar di layar mobil tetap glance-able dan nggak kebanjiran
- * portal yang nggak relevan.
+ * Portals to display: every ops target portal (regardless of distance) + the [maxNearby] nearest
+ * portals to the reference point. Keeps the car screen list glanceable instead of flooding it
+ * with irrelevant portals.
  */
 fun selectPortalsForDisplay(
     portals: List<Portal>,

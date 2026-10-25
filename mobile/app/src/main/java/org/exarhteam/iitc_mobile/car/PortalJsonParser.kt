@@ -2,18 +2,18 @@ package org.exarhteam.iitc_mobile.car
 
 import org.json.JSONObject
 
-/** Hasil parsing payload bridge. */
+/** Result of parsing a bridge payload. */
 sealed class ParseResult {
     data class Success(val snapshot: PortalSnapshot) : ParseResult()
     data class Failure(val reason: String) : ParseResult()
 }
 
 /**
- * Parser payload dari userscript bridge (format v1, lihat spec §4):
+ * Parser for payloads from the userscript bridge (format v1, see spec §4):
  * { "v":1, "ts":<ms>, "bbox":[s,w,n,e], "portals":[{"g","n","lat","lng","t","l","hp"}, ...] }
  *
- * Semua gerbang validasi ada di sini supaya JSInterface tetap tipis dan parser bisa diuji
- * terpisah tanpa Android.
+ * All validation gates live here so the JSInterface stays thin and the parser can be tested
+ * separately, without Android.
  */
 object PortalJsonParser {
 
@@ -22,23 +22,23 @@ object PortalJsonParser {
     const val MAX_PORTALS = 300
 
     fun parse(json: String?, receivedAtMs: Long = System.currentTimeMillis()): ParseResult {
-        if (json.isNullOrBlank()) return ParseResult.Failure("payload kosong")
+        if (json.isNullOrBlank()) return ParseResult.Failure("empty payload")
         if (json.length > MAX_PAYLOAD_CHARS) {
-            return ParseResult.Failure("payload ${json.length} char melebihi batas $MAX_PAYLOAD_CHARS")
+            return ParseResult.Failure("payload of ${json.length} chars exceeds the $MAX_PAYLOAD_CHARS limit")
         }
         val root = try {
             JSONObject(json)
         } catch (t: Throwable) {
-            return ParseResult.Failure("JSON tidak valid: ${t.message}")
+            return ParseResult.Failure("invalid JSON: ${t.message}")
         }
 
         val version = root.optInt("v", -1)
         if (version != SUPPORTED_VERSION) {
-            return ParseResult.Failure("versi payload $version tidak didukung (butuh $SUPPORTED_VERSION)")
+            return ParseResult.Failure("payload version $version is not supported (expected $SUPPORTED_VERSION)")
         }
 
         val array = root.optJSONArray("portals")
-            ?: return ParseResult.Failure("field 'portals' nggak ada")
+            ?: return ParseResult.Failure("missing the 'portals' field")
 
         val portals = ArrayList<Portal>(minOf(array.length(), MAX_PORTALS))
         for (i in 0 until array.length()) {
@@ -62,7 +62,7 @@ object PortalJsonParser {
         )
     }
 
-    /** Portal yang nggak punya guid atau koordinat wajar dibuang, bukan bikin seluruh payload gagal. */
+    /** Portals with no guid or with nonsensical coordinates are dropped instead of failing the whole payload. */
     private fun parsePortal(obj: JSONObject): Portal? {
         val guid = obj.optString("g", "").ifBlank { return null }
         val lat = obj.optDouble("lat", Double.NaN)
@@ -71,7 +71,7 @@ object PortalJsonParser {
 
         return Portal(
             guid = guid,
-            name = obj.optString("n", "(tanpa nama)"),
+            name = obj.optString("n", "(unnamed)"),
             lat = lat,
             lng = lng,
             faction = Faction.fromCode(obj.optString("t", "")),

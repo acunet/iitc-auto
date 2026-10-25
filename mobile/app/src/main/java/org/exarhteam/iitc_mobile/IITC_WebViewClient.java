@@ -105,9 +105,9 @@ public class IITC_WebViewClient extends WebViewClient {
 
     @Override
     public void onPageFinished(final WebView view, final String url) {
-        // URL di-cache di sini (UI thread) buat dipakai bridge Android Auto.
-        // PENTING: WebView.getUrl() TIDAK boleh dipanggil dari thread JS bridge — kalau dipanggil
-        // dari sana, panggilan app.sendPortals() deadlock (sudah kejadian saat pengujian).
+        // The URL is cached here (UI thread) for the Android Auto bridge to use.
+        // IMPORTANT: WebView.getUrl() must NOT be called from the JS bridge thread — calling it
+        // from there makes the app.sendPortals() call deadlock (already happened during testing).
         PortalBridge.INSTANCE.setCurrentUrl(url);
 
         if (url.startsWith("https://intel.ingress.com")) {

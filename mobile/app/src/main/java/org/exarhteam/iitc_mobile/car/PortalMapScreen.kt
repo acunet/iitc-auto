@@ -24,20 +24,20 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
 /**
- * Layar peta portal di Android Auto (mode nyetir).
+ * Portal map screen on Android Auto (driving mode).
  *
- * Batasan host yang harus dipatuhi (ketemu dari error asli di emulator AAOS):
- * - row non-browsable WAJIB punya DistanceSpan,
- * - marker di peta berasal dari Row metadata -> Place,
- * - setAnchor() minta Place (bukan CarLocation),
- * - setCurrentLocationEnabled(true) menuntut izin lokasi (sudah ada di manifest IITC Mobile).
+ * Host constraints that must be honoured (found from real errors on the AAOS emulator):
+ * - a non-browsable row MUST have a DistanceSpan,
+ * - markers on the map come from Row metadata -> Place,
+ * - setAnchor() wants a Place (not a CarLocation),
+ * - setCurrentLocationEnabled(true) requires the location permission (already present in the IITC Mobile manifest).
  */
 class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
 
     private val targetStore = OpsTargetStore(carContext)
 
     init {
-        // Setiap kiriman data baru dari WebView -> gambar ulang template.
+        // Every new data push from the WebView -> redraw the template.
         lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onCreate(owner: LifecycleOwner) {
                 lifecycleScope.launch {
@@ -51,11 +51,11 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
         val snapshot = PortalBridge.snapshot.value
             ?: return message(
                 title = "IITC Auto",
-                text = "Belum ada data portal.\n\nBuka IITC Auto di HP, login Ingress, lalu geser peta ke area ops."
+                text = "No portal data yet.\n\nOpen IITC Auto on the phone, log into Ingress, then pan the map to the ops area."
             )
 
         if (snapshot.portals.isEmpty()) {
-            return message("IITC Auto", "Data terakhir nggak punya portal di area itu. Geser peta IITC di HP dan tunggu peta ke-load.")
+            return message("IITC Auto", "The latest data has no portals in that area. Pan the IITC map on the phone and wait for it to load.")
         }
 
         val targets = targetStore.targets()
@@ -72,9 +72,9 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
             shown.forEach { portal ->
                 val distanceM = Geo.distanceMeters(ref.first, ref.second, portal.lat, portal.lng)
 
-                // Nama portal jadi JUDUL (teks biasa), DistanceSpan ditempel di baris teks pertama.
-                // Sebelumnya span dipasang di judul, dan host menampilkan jaraknya sebagai judul —
-                // akibatnya nama portal hilang dari layar mobil (ketemu saat uji di emulator AAOS).
+                // The portal name is the TITLE (plain text) and the DistanceSpan goes on the first text row.
+                // Previously the span was set on the title and the host rendered the distance as the title —
+                // as a result the portal name vanished from the car screen (found while testing on the AAOS emulator).
                 val distanceText = SpannableString("${distanceM.toInt()} m")
                 distanceText.setSpan(
                     DistanceSpan.create(Distance.create(distanceM, Distance.UNIT_METERS)),
@@ -106,8 +106,8 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
     }
 
     /**
-     * Titik acuan buat hitung jarak: pusat area yang dikirim IITC.
-     * (Versi GPS-asli dari mobilnya bisa ditambahkan tanpa mengubah template.)
+     * Reference point for the distance math: the center of the area sent by IITC.
+     * (A real-GPS version from the car could be added without changing the template.)
      */
     private fun referencePoint(snapshot: PortalSnapshot): Pair<Double, Double> {
         val bbox = snapshot.bbox
@@ -135,7 +135,7 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
 
     private fun textFor(portal: Portal, isTarget: Boolean): String {
         val level = if (portal.level > 0) "L${portal.level}" else "L?"
-        // HP cuma relevan buat portal yang dimiliki faksi; portal netral selalu 0% dan itu cuma noise.
+        // HP is only relevant for portals owned by a faction; neutral portals are always 0% and that is just noise.
         val hp = portal.health
         val health = if (hp != null && hp > 0 && portal.faction != Faction.NEUTRAL && portal.faction != Faction.UNKNOWN) {
             " · HP $hp%"
@@ -148,9 +148,9 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
 
     private fun titleFor(snapshot: PortalSnapshot): String =
         if (snapshot.isStale()) {
-            "Portal sekitar · data ${snapshot.ageSeconds() / 60} menit lalu"
+            "Nearby portals · data ${snapshot.ageSeconds() / 60} min old"
         } else {
-            "Portal sekitar"
+            "Nearby portals"
         }
 
     private fun message(title: String, text: String): Template =
@@ -160,7 +160,7 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
             .build()
 
     companion object {
-        /** Host membatasi jumlah baris per halaman; 6 aman dan tetap glance-able. */
+        /** The host limits the number of rows per page; 6 is safe and still glanceable. */
         const val MAX_ROWS = 6
         const val MAX_NEARBY = 5
     }

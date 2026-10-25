@@ -3,11 +3,11 @@ package org.exarhteam.iitc_mobile.car
 import android.content.Context
 
 /**
- * Daftar portal target ops (guid). Portal yang ada di daftar ini selalu ditampilkan di layar
- * mobil, apa pun jaraknya, dan ditandai "TARGET".
+ * List of ops target portals (guid). A portal in this list is always shown on the car screen,
+ * whatever its distance, and is flagged "TARGET".
  *
- * Disimpan di SharedPreferences supaya nggak perlu izin storage dan tetap ada setelah app mati.
- * Sumber isinya di fase berikutnya: plugin IITC atau layar di HP.
+ * Stored in SharedPreferences so no storage permission is needed and the list still exists after
+ * the app is killed. Where the entries come from is a later phase: an IITC plugin or a phone-side screen.
  */
 class OpsTargetStore(context: Context) {
 
