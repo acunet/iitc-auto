@@ -163,7 +163,15 @@ public class IITC_JSInterface {
         final IITC_WebView webView = mIitc.getWebView();
         final String url = webView != null ? webView.getUrl() : null;
         final boolean accepted = PortalBridge.INSTANCE.accept(json, url);
-        if (!accepted) {
+        if (accepted) {
+            final org.exarhteam.iitc_mobile.car.PortalSnapshot snapshot =
+                    PortalBridge.INSTANCE.getSnapshot().getValue();
+            final int count = snapshot == null ? 0 : snapshot.getPortals().size();
+            // Log sukses ini penting: satu-satunya cara memastikan data portal beneran nyampe
+            // ke sisi native tanpa harus lihat layar mobil.
+            Log.d("bridge: payload portal diterima (" + count + " portal, "
+                    + (json != null ? json.length() : 0) + " char)");
+        } else {
             Log.d("bridge: payload portal ditolak -> " + PortalBridge.INSTANCE.getLastRejection().getValue());
         }
     }
