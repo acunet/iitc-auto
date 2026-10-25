@@ -47,6 +47,11 @@ class PortalMapScreen(carContext: CarContext) : Screen(carContext) {
                 lifecycleScope.launch {
                     PortalBridge.snapshot.collect { invalidate() }
                 }
+                // The ops-target list can change while this screen is open (the agent taps the target
+                // button on the phone), and that is not a new data push — hence a separate signal.
+                lifecycleScope.launch {
+                    PortalBridge.targetsRevision.collect { invalidate() }
+                }
             }
         })
     }

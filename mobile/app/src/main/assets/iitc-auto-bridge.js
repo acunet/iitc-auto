@@ -149,6 +149,39 @@
         }
     }
 
+    // ---------- ops target button (drawn inside IITC's portal panel) ----------
+
+    /**
+     * Adds a toggle to IITC's portal details panel. Portals marked here are always shown on the car
+     * screen whatever their distance; the list itself lives in the app, not in the page.
+     */
+    function renderOpsTargetButton() {
+        try {
+            var container = document.getElementById('portaldetails');
+            var guid = window.selectedPortal;
+            if (!container || !guid || typeof app === 'undefined' || !app.toggleOpsTarget) return;
+
+            var old = document.getElementById('iitc-auto-target');
+            if (old && old.parentNode) old.parentNode.removeChild(old);
+
+            var isTarget = app.isOpsTarget(guid);
+            var button = document.createElement('a');
+            button.id = 'iitc-auto-target';
+            button.href = 'javascript:void(0)';
+            button.textContent = isTarget ? '★ ops target — tap to remove' : '☆ set as ops target';
+            button.style.cssText = 'display:block;margin:6px;padding:6px;text-align:center;border-radius:4px;' +
+                'font-weight:bold;cursor:pointer;text-decoration:none;' +
+                (isTarget ? 'background:#ffd400;color:#000' : 'background:#333;color:#ffd400');
+            button.onclick = function () {
+                app.toggleOpsTarget(guid);
+                renderOpsTargetButton();
+            };
+            container.appendChild(button);
+        } catch (e) {
+            console.log('[IITC Auto bridge] ops target button failed: ' + e);
+        }
+    }
+
     // Exposed for the node unit tests (mobile/tests) — not used by IITC.
     window.__iitcAutoBridge = {
         CONFIG: CONFIG,
@@ -157,11 +190,14 @@
         shouldSend: shouldSend,
         buildPayload: buildPayload,
         onMapDataRefreshEnd: onMapDataRefreshEnd,
+        renderOpsTargetButton: renderOpsTargetButton,
         state: state
     };
 
     if (typeof window.addHook === 'function') {
         window.addHook('mapDataRefreshEnd', onMapDataRefreshEnd);
+        // IITC redraws #portaldetails from scratch on every selection, so the button is re-added here.
+        window.addHook('portalDetailsUpdated', renderOpsTargetButton);
         console.log('[IITC Auto bridge] on: portal data will be sent to the car screen');
     }
 })();

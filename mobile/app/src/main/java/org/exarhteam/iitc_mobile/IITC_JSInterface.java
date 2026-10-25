@@ -179,6 +179,36 @@ public class IITC_JSInterface {
         }
     }
 
+    /**
+     * Called by the bridge userscript when the agent taps the ops-target button in IITC's portal
+     * panel: app.toggleOpsTarget(guid). Same source check as the payload path — only the intel map
+     * may change this list — and the same rule about WebView APIs (see sendPortals).
+     *
+     * @return true when the portal is a target after the toggle, so the button can redraw itself.
+     */
+    @JavascriptInterface
+    public boolean toggleOpsTarget(final String guid) {
+        if (guid == null || guid.trim().isEmpty()) return false;
+
+        final String url = PortalBridge.INSTANCE.getCurrentUrl();
+        if (url == null || !PortalBridge.INSTANCE.isTrustedSource(url)) {
+            Log.d("bridge: ops target toggle ignored, page is not the intel map");
+            return false;
+        }
+
+        final boolean nowTarget = new org.exarhteam.iitc_mobile.car.OpsTargetStore(mIitc).toggle(guid);
+        Log.d("bridge: ops target " + (nowTarget ? "added" : "removed") + " (" + guid + ")");
+        // The car screen may already be open: tell it to redraw with the new list.
+        PortalBridge.INSTANCE.notifyTargetsChanged();
+        return nowTarget;
+    }
+
+    /** Called by the bridge userscript to draw the button in the right state. */
+    @JavascriptInterface
+    public boolean isOpsTarget(final String guid) {
+        return guid != null && new org.exarhteam.iitc_mobile.car.OpsTargetStore(mIitc).targets().contains(guid);
+    }
+
     // get layers and list them in a dialog
     @JavascriptInterface
     public void setLayers(final String base_layer, final String overlay_layer) {

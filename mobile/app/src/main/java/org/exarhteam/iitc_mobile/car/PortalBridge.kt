@@ -67,6 +67,19 @@ object PortalBridge {
         _snapshot.value = null
     }
 
+    private val _targetsRevision = MutableStateFlow(0)
+
+    /**
+     * Bumped when the ops-target list changes from outside the car screen (the agent taps the target
+     * button on the phone). No new portal data arrives in that case, so the snapshot flow would not
+     * fire and an open car screen would keep showing the old list.
+     */
+    val targetsRevision: StateFlow<Int> = _targetsRevision.asStateFlow()
+
+    fun notifyTargetsChanged() {
+        _targetsRevision.value += 1
+    }
+
     /**
      * Only intel map pages may push data. The host match must be exactly "ingress.com" or one of
      * its subdomains — "evil-ingress.com" also ends with "ingress.com", and that kind of lax
