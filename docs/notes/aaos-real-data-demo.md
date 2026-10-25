@@ -52,3 +52,31 @@ Evidence: `docs/notes/img/aaos-real-portals-v1.png` and `aaos-real-portals-v2.pn
 
 
 After the English pass, the same screen was re-verified with the same real payload: English UI, screenshot `docs/notes/img/aaos-real-portals-en.png`.
+
+## Faction markers on the car screen (2026-10-25)
+
+The markers are the only thing on that screen which says whose area you are driving through, so the
+rules are now explicit in `PortalMapScreen.toPlace`:
+
+| Faction | Marker | Status |
+|---|---|---|
+| Enlightened | green balloon, white `E` | verified: a cluster of 5 Enlightened portals, all green with `E` |
+| Resistance | blue balloon, white `R` | verified: 4 blue `R` markers in a Resistance cluster |
+| Machina | red balloon, white `M` | same code path (`CarColor.RED`), no screenshot of a red cluster yet |
+| Neutral / unknown | white balloon with a small dark dot, no letter | a letter — or the host's fallback row index — is as loud as a faction pin |
+
+What the host decides, learned the hard way:
+
+- Every marker attached to a list row is drawn as a **full balloon**, and its size is not ours to set.
+  With a label the host puts the label in the balloon; without one it puts the row index; with an
+  icon it puts the icon.
+- `PlaceMarker.TYPE_IMAGE` — tried as a route to a bare dot — makes the AAOS host throw and the car
+  app disappears from the driving screen. The neutral marker is therefore back on `TYPE_ICON`.
+- So the smallest a neutral portal can look here is a dot inside a balloon. If that is still too
+  loud, the next step is to drop neutral rows from the map metadata and keep them in the list only:
+  one line in `toPlace`.
+
+Evidence: `img/aaos-markers-enlightened.png`, `img/aaos-markers-resistance.png` and
+`img/aaos-markers-neutral.png`. Each one was made from the real payload of the author's account with
+the bbox moved so that the nearest-five selection window lands inside that faction's cluster — the
+same thing as panning the phone map there — then injected into the emulator over CDP.
