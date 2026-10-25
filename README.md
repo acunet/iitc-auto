@@ -1,108 +1,111 @@
 # IITC Auto
 
-Portal **IITC** (Ingress Intel Total Conversion) di layar **Android Auto** — biar pas ops di
-lapangan, portal sekitar dan portal target kelihatan di head unit mobil tanpa harus nyimak HP.
+**IITC** (Ingress Intel Total Conversion) portals on an **Android Auto** head unit — so during a
+field op you can see nearby portals and your op targets on the car screen instead of squinting at
+the phone.
 
-Dibuat buat pemakaian pribadi dengan head unit yang mendukung Android Auto (di sini: Jaecoo J7).
-**Bukan** proyek resmi IITC-CE maupun Niantic.
+Built for personal use with an Android Auto capable head unit (in this case: a Jaecoo J7).
+**Not** an official IITC-CE or Niantic project.
 
-## Dua mode
+## Two modes
 
-| Kondisi mobil | Yang tampil | Cara kerjanya |
+| Car state | What you see | How it works |
 |---|---|---|
-| **Nyetir** | Peta portal di template POI: marker per faksi (R biru / E hijau / M merah / N abu), level, dan jarak; portal target ops selalu ikut walau jauh | `CarAppService` kategori POI + `PlaceListMapTemplate` — petanya digambar host, kita cuma mengirim `Place` marker |
-| **Berhenti** | **IITC asli fullscreen** (WebView + plugin apa adanya) | Kategori `android.intent.category.CAR_LAUNCHER` (parked app). Android Auto otomatis mengeluarkan app begitu mobil jalan |
+| **Driving** | Portal map in a POI template: one marker per faction (R blue / E green / M red / N grey), level and distance; op-target portals are always included even when far away | `CarAppService` with the POI category + `PlaceListMapTemplate` — the host renders the map, we only supply `Place` markers |
+| **Parked** | The **real IITC**, fullscreen (WebView + plugins, unmodified) | `android.intent.category.CAR_LAUNCHER` (parked app). Android Auto dismisses the app as soon as the car moves |
 
-## Cara kerja bridge (mode nyetir)
+## How the bridge works (driving mode)
 
 ```
-WebView IITC (intel.ingress.com, sesi login milik IITC sendiri)
-  └─ assets/iitc-auto-bridge.js      disuntik otomatis setelah IITC selesai boot
-       │  hook mapDataRefreshEnd → ambil window.portals → throttle 15 s,
-       │  hanya kirim kalau isinya berubah, maksimal 300 portal, plus bbox viewport
-       └─ app.sendPortals(json)      JavascriptInterface (di fork ini namanya "app")
-            └─ car/PortalBridge      validasi (hanya dari ingress.com, maks 256 KB) + parser
-                 └─ car/PortalMapScreen   → PlaceListMapTemplate + marker + DistanceSpan
+IITC WebView (intel.ingress.com, session owned by IITC itself)
+  └─ assets/iitc-auto-bridge.js      injected automatically once IITC finishes booting
+       │  hooks mapDataRefreshEnd → reads window.portals → 15 s throttle,
+       │  only sends when the payload changed, max 300 portals, plus the viewport bbox
+       └─ app.sendPortals(json)      JavascriptInterface (named "app" in this fork)
+            └─ car/PortalBridge      validation (ingress.com only, 256 KB cap) + parser
+                 └─ car/PortalMapScreen   → PlaceListMapTemplate + markers + DistanceSpan
 ```
 
-Yang **tidak** dipakai dan kenapa:
+What is deliberately **not** used, and why:
 
-- **Bukan WebView background sendiri.** IITC Mobile sudah menangani login Ingress, storage plugin,
-  dan sesi WebView-nya; bikin WebView kedua berarti harus menanggung login OAuth yang diblokir
-  Google di embedded WebView (`403 disallowed_useragent`) plus masalah Doze/lifecycle. Bridge ini
-  menempel di WebView yang sudah ada.
-- **Nol request tambahan ke intel.ingress.com.** Data yang dikirim persis data yang sudah diambil
-  IITC untuk user; bridge tidak pernah meminta data sendiri dan tidak menggerakkan peta. Ini
-  menjaga profil pemakaian intel (dan risiko rate limit/"excessive intel use") tetap sama.
-- **Nol izin storage, nol IPC.** Aliran data WebView → layar mobil terjadi di dalam satu proses.
+- **No separate background WebView.** IITC Mobile already handles Ingress login, plugin storage and
+  its own WebView session; a second WebView would inherit Google's OAuth block on embedded WebViews
+  (`403 disallowed_useragent`) plus Doze/lifecycle problems. The bridge attaches to the WebView that
+  already exists.
+- **Zero extra requests to intel.ingress.com.** The data sent is exactly the data IITC already
+  fetched for the user; the bridge never requests data on its own and never pans the map. This keeps
+  the intel usage profile (and the rate-limit / "excessive intel use" risk) unchanged.
+- **No storage permissions, no IPC.** The WebView → car screen data path stays inside one process.
 
 ## Status
 
-- **F2 selesai, teruji sebagian.** Bridge + layar peta sudah jalan: `13 test JVM` + `8 test JS`
-  hijau, dan render `PlaceListMapTemplate` + marker faksi sudah terbukti di emulator
-  Android Automotive OS (lihat `docs/notes/img/`).
-- **Belum diuji end-to-end di mobil** (butuh HP login Ingress + head unit). Catatan tiap fase ada di
-  [`docs/notes/`](docs/notes/).
+- **F2 done, partially verified.** The bridge and the car screen are implemented: `13 JVM tests` +
+  `8 JS tests` green, and `PlaceListMapTemplate` rendering with faction markers was proven on an
+  Android Automotive OS emulator (see `docs/notes/img/`).
+- **Not yet verified end-to-end in a car** (needs a phone logged into Ingress plus the head unit).
+  Per-phase notes live in [`docs/notes/`](docs/notes/) (Indonesian).
 
 ## Build
 
 ```bash
-# prasyarat: JDK 17-21, Android SDK (platform 36), Node
-npm install                  # dependency build userscript IITC (lightningcss dll)
-python build.py mobile       # generate assets/total-conversion-build.user.js + plugins/
+# requirements: JDK 17-21, Android SDK (platform 36), Node
+npm install                  # build deps for the IITC userscript (lightningcss etc.)
+python build.py mobile       # generates assets/total-conversion-build.user.js + plugins/
 cd mobile && ./gradlew assembleDebug
 ```
 
-**Penting:** asset userscript IITC (`mobile/app/src/main/assets/total-conversion-build.user.js`
-beserta `plugins/`) itu hasil generate, bukan hasil Gradle. Tanpa `python build.py mobile`, APK-nya
-kosong dan IITC-nya nyangkut di splash screen. Keduanya sudah masuk `.gitignore`.
+**Important:** the IITC userscript assets (`mobile/app/src/main/assets/total-conversion-build.user.js`
+and `plugins/`) are generated, not produced by Gradle. Without `python build.py mobile` the APK is
+empty and IITC hangs on its splash screen. Both paths are in `.gitignore`.
 
-Test:
+Tests:
 
 ```bash
-cd mobile && ./gradlew :app:testDebugUnitTest       # 13 test JVM
-node mobile/tests/iitc-auto-bridge.test.mjs         # 8 test logika userscript bridge
+cd mobile && ./gradlew :app:testDebugUnitTest       # 13 JVM tests
+node mobile/tests/iitc-auto-bridge.test.mjs         # 8 tests for the bridge userscript logic
 ```
 
-## Struktur
+## Layout
 
-| Path | Isi |
+| Path | Contents |
 |---|---|
-| `mobile/` | fork app Android (IITC Mobile) + layer Android Auto-nya |
-| `mobile/app/src/main/java/org/exarhteam/iitc_mobile/car/` | kode layer Android Auto (Kotlin) |
-| `mobile/app/src/main/assets/iitc-auto-bridge.js` | userscript bridge (kode kita, di-commit) |
-| `probe/` | probe app kategori POI terpisah: buat ngecek head unit mau nampilin app sideload |
-| `docs/superpowers/` | spec desain + rencana implementasi |
-| `docs/notes/` | catatan fase, hasil gate, temuan teknis, bukti screenshot |
-| `scripts/` | helper build/test/toolchain |
+| `mobile/` | the Android app fork (IITC Mobile) plus its Android Auto layer |
+| `mobile/app/src/main/java/org/exarhteam/iitc_mobile/car/` | Android Auto layer (Kotlin) |
+| `mobile/app/src/main/assets/iitc-auto-bridge.js` | bridge userscript (our code, committed) |
+| `probe/` | separate POI-category probe app: checks whether a head unit shows sideloaded car apps at all |
+| `docs/superpowers/` | design spec and implementation plan |
+| `docs/notes/` | phase notes, gate results, technical findings, screenshot evidence |
+| `scripts/` | build / test / toolchain helpers |
 
-## Lisensi, atribusi, dan etika
+## License, attribution and ethics
 
-Proyek ini **fork** dari [IITC-CE / ingress-intel-total-conversion](https://github.com/IITC-CE/ingress-intel-total-conversion).
-Upstream diimpor apa adanya pada commit `b017817df9d753195973ecbddd25a1d036549a7d`
-(lihat [`docs/notes/upstream.md`](docs/notes/upstream.md)).
+This project is a **fork** of
+[IITC-CE / ingress-intel-total-conversion](https://github.com/IITC-CE/ingress-intel-total-conversion).
+The upstream tree was imported as-is at commit `b017817df9d753195973ecbddd25a1d036549a7d`
+(see [`docs/notes/upstream.md`](docs/notes/upstream.md)).
 
-- **Lisensi upstream dipertahankan:** [`LICENSE`](LICENSE) (ISC — © 2018-2020 IITC-CE,
-  © 2013-2018 IITC) dan [`ATTRIBUTION.md`](ATTRIBUTION.md) (komponen/plugin pihak ketiga).
-  Notis copyright tidak diubah.
-- **Perubahan kita didaftarkan** di [`MODIFICATIONS.md`](MODIFICATIONS.md): siapa mengubah apa,
-  supaya jelas mana kode upstream dan mana tambahan IITC Auto.
-- **Tidak ada klaim endorsee.** Nama "IITC" dan "Ingress" dipakai sebagai penanda asal-usul, bukan
-  untuk mengesankan dukungan dari IITC-CE atau Niantic. Ganti nama kalau mau dipakai lebih luas.
-- **README upstream tetap tersedia** sebagai `README-UPSTREAM.md`.
+- **Upstream licensing is preserved:** [`LICENSE`](LICENSE) (ISC — © 2018-2020 IITC-CE,
+  © 2013-2018 IITC) and [`ATTRIBUTION.md`](ATTRIBUTION.md) (third-party components and plugins).
+  Copyright notices are untouched.
+- **Our changes are itemised** in [`MODIFICATIONS.md`](MODIFICATIONS.md), so it stays clear which
+  code is upstream and which is IITC Auto.
+- **No endorsement is implied.** "IITC" and "Ingress" are used to indicate provenance, not to imply
+  support from IITC-CE or Niantic. Rename it if you plan to distribute it widely.
+- **The upstream README is kept** as `README-UPSTREAM.md`.
 
-### Peringatan yang harus dibaca
+### Warnings you should read
 
-1. **IITC dianggap melanggar ToS Ingress.** Niantic menyatakan semua software pihak ketiga
-   melanggar ToS; risiko (termasuk ban akun) ditanggung pemakai. Jangan membagikan screenshot dari
-   IITC ke kanal resmi Ingress.
-2. **Hanya untuk sideload.** App ini tidak bisa masuk Google Play: kategori parked "browser" tidak
-   didukung di Android Auto, dan template POI butuh review manual dengan syarat "relevan buat nyetir".
-3. **Mode parked hanya saat mobil berhenti** — Android Auto menghentikannya begitu mobil jalan.
-   Itu aturan keselamatan Google, bukan pilihan desain kita.
-4. Jangan pasang di head unit produksi atau kendaraan yang bukan milik sendiri.
+1. **IITC is considered a violation of the Ingress ToS.** Niantic states that all third-party
+   software violates the ToS; the risk (including account bans) is the user's. Do not post IITC
+   screenshots to official Ingress channels.
+2. **Sideload only.** This app cannot ship on Google Play: the parked "browser" category is not
+   supported on Android Auto, and a POI template would need manual review against a
+   "meaningful functionality relevant to driving" requirement.
+3. **Parked mode works only while the car is stationary** — Android Auto stops the app as soon as the
+   car moves. That is a Google safety rule, not a design choice here.
+4. Do not install this on a production head unit or on a vehicle you do not own.
 
-## Kontribusi
+## Contributing
 
-Isu dan PR terbuka, tapi prioritasnya pemakaian pribadi: perubahan yang menambah permintaan data ke
-intel.ingress.com atau menaikkan frekuensi request akan ditolak.
+Issues and PRs are welcome, but the priority is personal use: changes that add requests to
+intel.ingress.com or increase request frequency will be rejected.
