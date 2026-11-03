@@ -40,6 +40,9 @@ fi
   echo "== 3. Android Auto / car host side =="
   adb -s "$D" logcat -d 2>/dev/null | grep -iE 'carapp|car app|gearhead.*(launch|bind|session)|carservice' | tail -30 || true
   echo
+  echo "== 3b. protocol version / app categories the head unit advertised =="
+  adb -s "$D" logcat -d 2>/dev/null | grep -iE 'protocol version|supported.*categor|categor.*support|head unit.*version' | tail -15 || true
+  echo
   echo "== 4. ops targets stored on the phone =="
   adb -s "$D" shell run-as "$PKG" cat "/data/data/$PKG/shared_prefs/iitc_auto_targets.xml" 2>/dev/null || echo "(none)"
   echo

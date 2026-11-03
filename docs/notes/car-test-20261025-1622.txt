@@ -1,0 +1,22 @@
+== IITC Auto car test evidence ==
+captured: Sun Oct 25 16:22:14 SEAST 2026
+device:   RRCWA01F6KE (SM-F731B, Android 16)
+android auto:     versionName=17.9.664044-release
+
+== 1. did the car host open our car app? ==
+
+== 2. bridge: portal data + ops targets on the phone side ==
+10-25 14:56:03.847 12885 13030 D iitcm   : bridge: portal payload accepted (201 portal, 21320 char)
+10-25 15:19:18.844 12885 13030 D iitcm   : bridge: portal payload accepted (227 portal, 23235 char)
+10-25 15:24:23.434 12885 13030 D iitcm   : bridge: portal payload accepted (227 portal, 23235 char)
+10-25 15:29:26.363 12885 13030 D iitcm   : bridge: portal payload accepted (227 portal, 23235 char)
+
+== 3. Android Auto / car host side ==
+
+== 4. ops targets stored on the phone ==
+(none)
+
+== verdict ==
+NO EVIDENCE: the host never opened our car app.
+Check on the phone: Android Auto > Developer settings > 'Unknown sources' enabled, and
+Android Auto > Customize launcher > IITC Auto ticked.
