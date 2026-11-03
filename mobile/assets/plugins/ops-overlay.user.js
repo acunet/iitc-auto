@@ -30,7 +30,7 @@ function wrapper(plugin_info) {
     refreshSeconds: 60,
     sinceMinutes: 60, // how far back the backend looks for beacons and tandem hits
     minHits: 3, // a single 30 s coincidence is not a badge
-    showBeacons: true,
+    showBeacons: false, // nothing reports beacons any more (tactical-relay is COMM-only)
     showTandem: true,
     showTargets: true,
     targetColor: '#4fc3f7',

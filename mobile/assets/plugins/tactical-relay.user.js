@@ -4,7 +4,7 @@
 // @category       Misc
 // @version        0.1.0
 // @namespace      https://github.com/acunet/iitc-plugins-enl
-// @description    Relay COMM activity and battle-beacon sightings to an ops backend. Sends nothing until a token is set (dry-run by default).
+// @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
 // @match          https://intel-x.ingress.com/*
 // @grant          none
@@ -22,10 +22,8 @@ function wrapper(plugin_info) {
   var LS_KEY = 'plugin-tactical-relay-settings';
   var started = false;
 
-  // Matched against the joined TEXT markup, padded with spaces, first match wins. Battle Beacon is a
-  // plain "Beacon" broadcast otherwise, so it must come first.
+  // Matched against the joined TEXT markup, padded with spaces, first match wins.
   var DEFAULT_PHRASES = {
-    beacon: ['Battle Beacon', 'Beacon'],
     fracker: ['Fracker'],
     capture: [' captured '],
     deploy: [' deployed '],
@@ -49,15 +47,8 @@ function wrapper(plugin_info) {
     dumpComm: false, // learn mode: log every parsed event verbatim
     maxQueue: 500,
     factions: 'any', // any | enl | res
-    beaconRescanSeconds: 300, // re-post an unchanged beacon sighting after this long
-    checkpointMinutes: 0, // anomaly checkpoint interval in minutes; 0 = never send next_checkpoint
-    volatileOrnaments: '', // comma-separated ornament prefixes your cluster counts as "volatile"
     phrases: {},
   };
-
-  // Ornaments that mean "a battle beacon is standing on this portal". IITC exposes portal ornaments
-  // (`data.ornaments`) for both map entities and portal details; nothing else about rounds exists client-side.
-  var BEACON_RE = /^peBB_BATTLE/;
 
   // ---------------------------------------------------------------- core (pure, unit-tested) ---
 
@@ -168,9 +159,8 @@ function wrapper(plugin_info) {
     if (started) return; // bootPlugins + iitcLoaded can both fire; setup must run once
     started = true;
     var cfg = loadSettings();
-    var stats = { parsed: 0, queued: 0, sent: 0, failed: 0, beacons: 0, lastError: '', lastSend: 0 };
+    var stats = { parsed: 0, queued: 0, sent: 0, failed: 0, lastError: '', lastSend: 0 };
     var seen = {}; // comm guid -> ms, pruned on every hook payload
-    var beaconSeen = {}; // guid|ornaments -> ms
 
     var queue = createQueue({
       windowMs: Math.max(1, cfg.flushSeconds) * 1000,
@@ -275,70 +265,9 @@ function wrapper(plugin_info) {
       }
     }
 
-    function isVolatile(ornaments) {
-      var list = String(cfg.volatileOrnaments || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-      for (var i = 0; i < list.length; i++) for (var j = 0; j < ornaments.length; j++) if (ornaments[j].indexOf(list[i]) === 0) return true;
-      return false;
-    }
-
-    // The schedule is not in the game data, so it is config: an interval, or nothing. Round up to the
-    // next boundary (+5 s so a boundary that is already passing does not alert at T-0).
-    function nextCheckpointIso(minutes) {
-      if (!minutes || minutes < 1) return null;
-      var step = minutes * 60000;
-      return new Date(Math.ceil((Date.now() + 5000) / step) * step).toISOString();
-    }
-
-    // Round number and "volatile" are not in the client data: the client reports the ornament ids it
-    // can see and lets the backend decide. See README "What it cannot do".
-    function reportBeacon(guid, data, source) {
-      if (!cfg.enabled || !guid || !data) return;
-      var ornaments = data.ornaments || [];
-      var beacon = [];
-      for (var i = 0; i < ornaments.length; i++) if (BEACON_RE.test(ornaments[i])) beacon.push(ornaments[i]);
-      if (!beacon.length) return;
-      var key = guid + '|' + beacon.join(',');
-      var now = Date.now();
-      if (beaconSeen[key] && now - beaconSeen[key] < cfg.beaconRescanSeconds * 1000) return;
-      beaconSeen[key] = now;
-      stats.beacons++;
-      var body = {
-        portal_guid: guid,
-        portal_name: data.title || data.name || null,
-        lat: typeof data.latE6 === 'number' ? data.latE6 / 1e6 : null,
-        lng: typeof data.lngE6 === 'number' ? data.lngE6 / 1e6 : null,
-        ornaments: beacon,
-        is_volatile: isVolatile(ornaments),
-        next_checkpoint: nextCheckpointIso(cfg.checkpointMinutes),
-        observed_at: new Date().toISOString(),
-        source: source,
-      };
-      if (cfg.dryRun || !cfg.apiBase || !cfg.token) {
-        console.log('tactical-relay DRY-RUN beacon ' + JSON.stringify(body));
-        return;
-      }
-      sendPost('/v1/beacon/report', body).catch(function (err) {
-        stats.failed++;
-        stats.lastError = String((err && err.message) || err);
-      });
-    }
-
-    function scanMapBeacons() {
-      var portals = window.portals || {};
-      for (var guid in portals) {
-        if (!portals.hasOwnProperty(guid)) continue;
-        var marker = portals[guid];
-        reportBeacon(guid, marker && marker.options && marker.options.data, 'map');
-      }
-    }
-
     window.addHook('publicChatDataAvailable', onComm);
     window.addHook('factionChatDataAvailable', onComm);
     window.addHook('alertsChatDataAvailable', onComm);
-    window.addHook('portalDetailLoaded', function (data) {
-      if (data && data.success) reportBeacon(data.guid, data.details, 'detail');
-    });
-    window.addHook('mapDataRefreshEnd', scanMapBeacons);
 
     // On mobile the operator sits on the map pane, so no COMM channel is polled unless asked for.
     if (cfg.backgroundComm && window.IITC && IITC.chat && IITC.chat.backgroundChannelData) {
@@ -357,7 +286,7 @@ function wrapper(plugin_info) {
         ['Token', cfg.token ? 'set (' + cfg.token.length + ' chars)' : 'EMPTY — never sends'],
         ['Mode', cfg.dryRun ? 'DRY-RUN' : 'LIVE'],
         ['Queued', queue.size() + ' / ' + cfg.maxQueue],
-        ['Parsed', stats.parsed + ' (beacons ' + stats.beacons + ')'],
+        ['Parsed', String(stats.parsed)],
         ['Sent', stats.sent + ' / failed ' + stats.failed],
         ['Last send', stats.lastSend ? new Date(stats.lastSend).toLocaleTimeString() : '—'],
         ['Last error', stats.lastError || '—'],
@@ -383,8 +312,6 @@ function wrapper(plugin_info) {
         '<p><b>Flush seconds</b> <input id="trl-flush" size="3" value="' + esc(cfg.flushSeconds) + '"> ' +
         '<label><input id="trl-dry" type="checkbox" ' + (cfg.dryRun ? 'checked' : '') + '> dry-run</label> ' +
         '<label><input id="trl-dump" type="checkbox" ' + (cfg.dumpComm ? 'checked' : '') + '> dump COMM</label></p>' +
-        '<p><b>Checkpoint minutes</b> <input id="trl-cp" size="3" value="' + esc(cfg.checkpointMinutes) + '"> ' +
-        '<span style="opacity:.6">0 = never send next_checkpoint</span></p>' +
         '<p style="opacity:.75">Faction filter: <select id="trl-factions">' +
         ['any', 'enl', 'res'].map(function (v) { return '<option value="' + v + '"' + (cfg.factions === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
         '</select></p>' +
@@ -406,7 +333,6 @@ function wrapper(plugin_info) {
               cfg.flushSeconds = Math.max(1, parseInt(get('trl-flush'), 10) || 5);
               cfg.dryRun = $('#trl-dry', $d).prop('checked');
               cfg.dumpComm = $('#trl-dump', $d).prop('checked');
-              cfg.checkpointMinutes = Math.max(0, parseInt(get('trl-cp'), 10) || 0);
               cfg.factions = get('trl-factions') || 'any';
               saveSettings(cfg);
               console.log('tactical-relay: settings saved (dryRun=' + cfg.dryRun + ')');
@@ -446,7 +372,6 @@ function wrapper(plugin_info) {
       return { cfg: cfg, stats: stats, queue: queue.size() };
     };
     thisPlugin.queue = queue;
-    thisPlugin.scanMapBeacons = scanMapBeacons;
     console.log('tactical-relay: ready (v' + VERSION + ')');
   };
 
