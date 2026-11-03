@@ -55,3 +55,27 @@ Not proven. The next car connection settles it:
    new code — only a mount and a charger.
 3. Wait for a newer Desktop Head Unit from Google (the current one is from 2022 and does not start a
    projection session with AA 17.9 — see `dhu-attempt.md`).
+
+## After the reboot (2026-11-03 14:18)
+
+The phone was rebooted; AA rebuilt its launcher list at 14:16:20 (`GH.LauncherApps ... [IGNORE_CACHE]`)
+and the "Customize launcher" list now reads:
+
+    Calendar, GameSnacks, Maps, Meet, Messages, Messenger, News, Phone, Reminder,
+    Settings, WA Business, Weather, WhatsApp  (+ Customize / Hidden Apps entries)
+
+Still **no IITC Auto and no Portal Probe**. Two things stand out:
+
+1. The list is not a stale car-session snapshot after all - a reboot rebuilds it.
+2. Everything in it is Play-installed (WhatsApp / WA Business are third-party, but Play).
+   Nothing sideloaded appears, whether it is a template app or our control app.
+
+That fits Google's documented split: "Unknown sources" in AA developer settings is the testing
+switch for the legacy AA categories (media / messaging), while Car App Library **template** apps
+are expected to be installed from Play - and the officially supported way to test an unpublished
+template app is the Desktop Head Unit, which no longer starts a session with AA 17.9
+(see dhu-attempt.md). We did not find a code-level workaround.
+
+Practical consequence: the car's own launcher is very likely out of reach for a sideloaded build.
+See the options section above; the tablet/head-unit route needs no code and the full IITC view
+already runs.
