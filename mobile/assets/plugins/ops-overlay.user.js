@@ -33,6 +33,8 @@ function wrapper(plugin_info) {
     showBeacons: false, // nothing reports beacons any more (tactical-relay is COMM-only)
     showTandem: true,
     showTargets: true,
+    showActivity: true, // dot per portal with recent activity
+    showPressure: true, // one circle per ~1.1 km cell, coloured by the dominant faction
     targetColor: '#4fc3f7',
     beaconColor: '#ff5c5c',
     tandemColor: '#ffb020',
@@ -74,6 +76,27 @@ function wrapper(plugin_info) {
     );
   }
 
+  var TEAM_COLORS = { ENLIGHTENED: '#4caf50', RESISTANCE: '#2196f3' };
+
+  function teamColor(team) {
+    return TEAM_COLORS[team] || '#9e9e9e';
+  }
+
+  function dotHtml(color) {
+    return (
+      '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + color +
+      ';border:1px solid rgba(0,0,0,.7)"></span>'
+    );
+  }
+
+  function ago(then, now) {
+    var s = Math.round((now - then) / 1000);
+    if (isNaN(s)) return '';
+    if (s < 90) return s + 's ago';
+    if (s < 5400) return Math.round(s / 60) + 'm ago';
+    return Math.round(s / 3600) + 'h ago';
+  }
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
@@ -87,7 +110,7 @@ function wrapper(plugin_info) {
     started = true;
 
     var cfg = loadSettings();
-    var stats = { fetches: 0, fail: 0, lastError: '', lastOk: 0, targets: 0, beacons: 0, tandem: 0 };
+    var stats = { fetches: 0, fail: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0 };
     var markers = []; // {marker, target, name} for countdown updates
     var lastBody = null; // last good payload, so a map refresh can re-anchor without another poll
     var refreshTimer = null;
@@ -131,8 +154,48 @@ function wrapper(plugin_info) {
       lastBody = body;
       clear();
       stats.targets = 0;
-      stats.beacons = 0;
       stats.tandem = 0;
+      stats.activity = 0;
+      stats.pressure = 0;
+      stats.beacons = 0;
+      var nowMs = Date.now();
+
+      var pressure = (body && body.pressure) || [];
+      if (cfg.showPressure) {
+        for (var c = 0; c < pressure.length; c++) {
+          var cell = pressure[c];
+          if (cell.lat == null || cell.lng == null) continue;
+          L.circle([cell.lat, cell.lng], {
+            radius: Math.min(600, 120 + (Number(cell.total) || 0) * 8),
+            color: teamColor(cell.dominant),
+            weight: 1,
+            opacity: 0.7,
+            fillColor: teamColor(cell.dominant),
+            fillOpacity: 0.15,
+            interactive: true,
+          })
+            .addTo(layer)
+            .bindPopup(popup(['pressure: ' + (cell.dominant || 'NEUTRAL'), 'ENL ' + (cell.enl || 0) + ' · RES ' + (cell.res || 0), 'total actions ' + (cell.total || 0)]));
+          stats.pressure++;
+        }
+      }
+
+      var activity = (body && body.activity) || [];
+      if (cfg.showActivity) {
+        for (var a = 0; a < activity.length; a++) {
+          var ev = activity[a];
+          if (ev.lat == null || ev.lng == null) continue;
+          var when = Date.parse(ev.recorded_at);
+          L.marker([ev.lat, ev.lng], {
+            icon: L.divIcon({ className: 'ops-overlay-dot', html: dotHtml(teamColor(ev.team)), iconSize: null }),
+            interactive: true,
+            keyboard: false,
+          })
+            .addTo(layer)
+            .bindPopup(popup([ev.portal_name, String(ev.action_type || '').toUpperCase() + ' — ' + (ev.agent_name || '?'), ago(when, nowMs) + (isNaN(when) ? '' : ' · ' + new Date(when).toLocaleTimeString())]));
+          stats.activity++;
+        }
+      }
 
       var targets = (body && body.targets) || [];
       if (cfg.showTargets) {
@@ -240,7 +303,7 @@ function wrapper(plugin_info) {
         ['Endpoint', cfg.apiBase || '(empty)'],
         ['Token', cfg.token ? 'set' : 'EMPTY — nothing is fetched'],
         ['Layer', LAYER_NAME],
-        ['Markers', stats.targets + ' target / ' + stats.tandem + ' tandem / ' + stats.beacons + ' beacon'],
+        ['Markers', stats.targets + ' target / ' + stats.tandem + ' tandem / ' + stats.activity + ' dot / ' + stats.pressure + ' cell / ' + stats.beacons + ' beacon'],
         ['Polls', stats.fetches + ' (failed ' + stats.fail + ')'],
         ['Last ok', stats.lastOk ? new Date(stats.lastOk).toLocaleTimeString() : '—'],
         ['Last error', stats.lastError || '—'],
@@ -263,6 +326,8 @@ function wrapper(plugin_info) {
         '<b>Lookback min</b> <input id="opl-since" size="3" value="' + esc(cfg.sinceMinutes) + '"> ' +
         '<b>Min hits</b> <input id="opl-hits" size="2" value="' + esc(cfg.minHits) + '"></p>' +
         '<p><label><input id="opl-targets" type="checkbox" ' + (cfg.showTargets ? 'checked' : '') + '> ops targets</label> ' +
+        '<label><input id="opl-activity" type="checkbox" ' + (cfg.showActivity ? 'checked' : '') + '> activity dots</label> ' +
+        '<label><input id="opl-pressure" type="checkbox" ' + (cfg.showPressure ? 'checked' : '') + '> pressure cells</label> ' +
         '<label><input id="opl-beacons" type="checkbox" ' + (cfg.showBeacons ? 'checked' : '') + '> beacon countdown</label> ' +
         '<label><input id="opl-tandem" type="checkbox" ' + (cfg.showTandem ? 'checked' : '') + '> tandem badges</label></p>' +
         '<p style="opacity:.7">Read-only: this plugin draws backend intel, it never reports anything.</p>' +
@@ -287,6 +352,8 @@ function wrapper(plugin_info) {
               cfg.sinceMinutes = Math.max(1, parseInt(get('opl-since'), 10) || 60);
               cfg.minHits = Math.max(1, parseInt(get('opl-hits'), 10) || 3);
               cfg.showTargets = $('#opl-targets', $d).prop('checked');
+              cfg.showActivity = $('#opl-activity', $d).prop('checked');
+              cfg.showPressure = $('#opl-pressure', $d).prop('checked');
               cfg.showBeacons = $('#opl-beacons', $d).prop('checked');
               cfg.showTandem = $('#opl-tandem', $d).prop('checked');
               window.localStorage.setItem(LS_KEY, JSON.stringify(cfg));
