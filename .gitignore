@@ -38,3 +38,7 @@ mobile/app/src/main/assets/plugins/
 # Python bytecode (never commit compiled build scripts)
 __pycache__/
 *.pyc
+
+# Output of `python build.py mobile` for the plugin bundle (copied upstream plugins).
+# Never commit: regenerated on every build, and it is not what the APK ships.
+mobile/assets/
