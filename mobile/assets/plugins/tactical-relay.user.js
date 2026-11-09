@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.1.1
+// @version        0.1.2
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,22 +18,23 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
   var LS_KEY = 'plugin-tactical-relay-settings';
   var started = false;
 
   // Matched against the joined TEXT markup, padded with spaces, first match wins.
+  // Only events the intel map actually publishes. Recharging, hacking, upgrading a resonator and
+  // anything about mods are never broadcast there (see the COMM notifications table on the Ingress
+  // wiki), so matching on them would just add dead entries. Portal neutralization is its own line.
   var DEFAULT_PHRASES = {
     fracker: ['Fracker'],
+    neutralize: [' neutralized '],
     capture: [' captured '],
     deploy: [' deployed '],
     destroy: [' destroyed '],
     flip: [' flipped ', 'ADA Refactor', 'JARVIS Virus'],
     link: [' linked '],
     field: [' Control Field '],
-    recharge: [' recharged '],
-    upgrade: [' upgraded '],
-    hack: [' hacked '],
   };
 
   var DEFAULTS = {
