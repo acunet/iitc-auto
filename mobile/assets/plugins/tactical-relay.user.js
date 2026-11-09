@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.1.0
+// @version        0.1.1
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.1.1';
   var LS_KEY = 'plugin-tactical-relay-settings';
   var started = false;
 
@@ -357,14 +357,26 @@ function wrapper(plugin_info) {
       IITC.toolbox.addButton({ id: 'tactical-relay-btn', label: 'Relay', title: 'Tactical Relay', action: openConfig });
     }
     // Mobile: the toolbox does not exist, so the drawer needs its own pane.
-    if (window.app && window.app.addPane) {
+    // Mobile: the app's own menu is fixed, so a drawer pane is the only entry point. Picking a pane
+    // runs window.show(id) -> hideall(), which hides the map: the pane itself has no view, so the
+    // plugin must draw its own UI from the paneChanged hook and then hand the screen back to the map.
+    if (window.IS_DEVICE_MOBILE && window.app && typeof window.app.addPane === 'function') {
       try {
-        window.app.addPane('tactical-relay', 'Relay', 'ic_action_refresh');
-        window.addHook('paneChanged', function (pane) {
-          if (pane === 'tactical-relay') openConfig();
+        window.app.addPane('tactical-relay', 'Relay', 'notifications');
+        window.addHook('paneChanged', function (id) {
+          if (id !== 'tactical-relay') return;
+          try {
+            openConfig();
+          } catch (e) {
+            stats.lastError = 'config dialog: ' + ((e && e.message) || e);
+            console.warn('tactical-relay: ' + stats.lastError);
+          }
+          setTimeout(function () {
+            if (window.show) window.show('map');
+          }, 60);
         });
       } catch (e) {
-        /* desktop */
+        console.warn('tactical-relay: pane registration failed — ' + ((e && e.message) || e));
       }
     }
 

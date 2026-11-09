@@ -2,7 +2,7 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.1.0
+// @version        0.1.1
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.1.1';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -375,14 +375,26 @@ function wrapper(plugin_info) {
     if (window.IITC && window.IITC.toolbox && window.IITC.toolbox.addButton) {
       IITC.toolbox.addButton({ id: 'ops-overlay-btn', label: 'Ops Layer', title: LAYER_NAME, action: openConfig });
     }
-    if (window.app && window.app.addPane) {
+    // Mobile: the app's own menu is fixed, so a drawer pane is the only entry point. Picking a pane
+    // runs window.show(id) -> hideall(), which hides the map: the pane itself has no view, so the
+    // plugin must draw its own UI from the paneChanged hook and then hand the screen back to the map.
+    if (window.IS_DEVICE_MOBILE && window.app && typeof window.app.addPane === 'function') {
       try {
-        window.app.addPane('ops-overlay', 'Ops Layer', 'ic_action_layers');
-        window.addHook('paneChanged', function (pane) {
-          if (pane === 'ops-overlay') openConfig();
+        window.app.addPane('ops-overlay', 'Ops Layer', 'layers');
+        window.addHook('paneChanged', function (id) {
+          if (id !== 'ops-overlay') return;
+          try {
+            openConfig();
+          } catch (e) {
+            stats.lastError = 'config dialog: ' + ((e && e.message) || e);
+            console.warn('ops-overlay: ' + stats.lastError);
+          }
+          setTimeout(function () {
+            if (window.show) window.show('map');
+          }, 60);
         });
       } catch (e) {
-        /* desktop */
+        console.warn('ops-overlay: pane registration failed — ' + ((e && e.message) || e));
       }
     }
 
