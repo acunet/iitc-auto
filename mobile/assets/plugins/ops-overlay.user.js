@@ -2,7 +2,7 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.1.1
+// @version        0.1.2
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -110,9 +110,10 @@ function wrapper(plugin_info) {
     started = true;
 
     var cfg = loadSettings();
-    var stats = { fetches: 0, fail: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0 };
+    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0 };
     var markers = []; // {marker, target, name} for countdown updates
     var lastBody = null; // last good payload, so a map refresh can re-anchor without another poll
+    var lastDigest = null; // payload identity, so an unchanged poll does not rebuild every marker
     var refreshTimer = null;
 
     var layer = L.layerGroup();
@@ -269,7 +270,17 @@ function wrapper(plugin_info) {
         stats.fetches++;
         send(query)
           .then(function (body) {
-            render(body);
+            // Rebuilding markers is the expensive part on a phone. The backend caches its payload, so
+            // an unchanged poll comes back byte-identical: skip the redraw instead of flickering.
+            var digest = JSON.stringify([body.targets, body.activity, body.pressure, body.beacons, body.tandem_portals]);
+            if (digest !== lastDigest) {
+              render(body);
+              lastDigest = digest;
+              stats.renders++;
+            } else {
+              lastBody = body;
+              stats.skipped++;
+            }
             stats.lastOk = Date.now();
             stats.lastError = '';
           })
