@@ -461,9 +461,8 @@ function wrapper(plugin_info) {
         window.app.addPane('ops-overlay', 'Ops Layer', 'layers');
         window.addHook('paneChanged', function (id) {
           if (id !== 'ops-overlay') return;
-try {
+          try {
             closePluginDialogs();
-
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);

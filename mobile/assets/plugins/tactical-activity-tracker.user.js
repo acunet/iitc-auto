@@ -348,9 +348,8 @@ function wrapper(plugin_info) {
         window.app.addPane('activity-trail', 'Activity Trail', 'layers');
         window.addHook('paneChanged', function (id) {
           if (id !== 'activity-trail') return;
-try {
+          try {
             closePluginDialogs();
-
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);

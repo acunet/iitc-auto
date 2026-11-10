@@ -459,9 +459,8 @@ function wrapper(plugin_info) {
         window.app.addPane('tactical-relay', 'Relay', 'notifications');
         window.addHook('paneChanged', function (id) {
           if (id !== 'tactical-relay') return;
-try {
+          try {
             closePluginDialogs();
-
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);
