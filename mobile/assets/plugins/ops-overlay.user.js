@@ -2,7 +2,7 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.3.2
+// @version        0.3.3
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.3.2';
+  var VERSION = '0.3.3';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -179,16 +179,30 @@ function wrapper(plugin_info) {
 
       var pressure = (body && body.pressure) || [];
       if (cfg.showPressure) {
+        // Intensity is relative to the busiest cell on screen: a fixed 15% fill made every cell an
+        // identical faint ring, which read as "no heat map at all".
+        var maxTotal = 1;
+        for (var m = 0; m < pressure.length; m++) maxTotal = Math.max(maxTotal, Number(pressure[m].total) || 0);
         for (var c = 0; c < pressure.length; c++) {
           var cell = pressure[c];
           if (cell.lat == null || cell.lng == null) continue;
+          var heat = Math.min(1, Math.sqrt((Number(cell.total) || 0) / maxTotal)); // sqrt: area, not radius, tracks the count
+          var radius = 150 + 900 * heat;
+          var colour = teamColor(cell.dominant);
+          // a soft halo under a brighter core: two overlapping fills read as a heat blob, one flat
+          // circle reads as a drawn ring
           L.circle([cell.lat, cell.lng], {
-            radius: Math.min(600, 120 + (Number(cell.total) || 0) * 8),
-            color: teamColor(cell.dominant),
-            weight: 1,
-            opacity: 0.7,
-            fillColor: teamColor(cell.dominant),
-            fillOpacity: 0.15,
+            radius: radius * 1.7,
+            stroke: false,
+            fillColor: colour,
+            fillOpacity: 0.08 + 0.22 * heat,
+            interactive: false,
+          }).addTo(layer);
+          L.circle([cell.lat, cell.lng], {
+            radius: radius,
+            stroke: false,
+            fillColor: colour,
+            fillOpacity: 0.18 + 0.5 * heat,
             interactive: true,
           })
             .addTo(layer)
