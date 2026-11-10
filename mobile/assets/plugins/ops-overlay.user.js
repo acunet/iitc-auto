@@ -2,7 +2,7 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.1.2
+// @version        0.3.1
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.1.2';
+  var VERSION = '0.3.1';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -35,6 +35,7 @@ function wrapper(plugin_info) {
     showTargets: true,
     showActivity: true, // dot per portal with recent activity
     showPressure: true, // one circle per ~1.1 km cell, coloured by the dominant faction
+    agents: '', // comma-separated allow-list; empty = every agent the relays ever saw
     targetColor: '#4fc3f7',
     beaconColor: '#ff5c5c',
     tandemColor: '#ffb020',
@@ -110,23 +111,32 @@ function wrapper(plugin_info) {
     started = true;
 
     var cfg = loadSettings();
-    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0 };
+    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, notModified: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0, relaysAlive: 0, relaysSeen: 0 };
     var markers = []; // {marker, target, name} for countdown updates
     var lastBody = null; // last good payload, so a map refresh can re-anchor without another poll
     var lastDigest = null; // payload identity, so an unchanged poll does not rebuild every marker
     var refreshTimer = null;
+    var lastEtag = '';
 
     var layer = L.layerGroup();
     window.layerChooser.addOverlay(layer, LAYER_NAME);
 
     function send(path) {
+      var headers = { 'X-Ops-Token': cfg.token };
+      // `cache: 'no-store'` stops the browser from revalidating on its own, so the ETag is sent by hand:
+      // an unchanged poll then costs headers instead of the whole payload.
+      if (lastEtag) headers['If-None-Match'] = lastEtag;
       return fetch(String(cfg.apiBase).replace(/\/+$/, '') + path, {
-        headers: { 'X-Ops-Token': cfg.token },
+        headers: headers,
         credentials: 'omit',
         cache: 'no-store',
       }).then(function (res) {
+        if (res.status === 304) return { notModified: true };
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
+        lastEtag = (res.headers && res.headers.get && res.headers.get('ETag')) || '';
+        return res.json().then(function (body) {
+          return { body: body };
+        });
       });
     }
 
@@ -154,6 +164,12 @@ function wrapper(plugin_info) {
     function render(body) {
       lastBody = body;
       clear();
+      // relay liveness: 15 min of silence reads as down, because a relay beats every 5 min
+      var relays = (body && body.relays) || [];
+      stats.relaysSeen = relays.length;
+      stats.relaysAlive = relays.filter(function (r) {
+        return Number(r.silent_seconds) <= 900;
+      }).length;
       stats.targets = 0;
       stats.tandem = 0;
       stats.activity = 0;
@@ -266,10 +282,19 @@ function wrapper(plugin_info) {
       }
       if (cfg.enabled && cfg.apiBase && cfg.token) {
         var bounds = window.map.getBounds();
-        var query = '/v1/overlay?bbox=' + bboxOf(bounds) + '&since=' + cfg.sinceMinutes + '&min_hits=' + cfg.minHits;
+        var query =
+          '/v1/overlay?bbox=' + bboxOf(bounds) + '&since=' + cfg.sinceMinutes + '&min_hits=' + cfg.minHits +
+          '&agents=' + encodeURIComponent(cfg.agents || '');
         stats.fetches++;
         send(query)
-          .then(function (body) {
+          .then(function (result) {
+            if (result.notModified) {
+              stats.notModified++;
+              stats.lastOk = Date.now();
+              stats.lastError = '';
+              return;
+            }
+            var body = result.body;
             // Rebuilding markers is the expensive part on a phone. The backend caches its payload, so
             // an unchanged poll comes back byte-identical: skip the redraw instead of flickering.
             var digest = JSON.stringify([body.targets, body.activity, body.pressure, body.beacons, body.tandem_portals]);
@@ -315,7 +340,15 @@ function wrapper(plugin_info) {
         ['Token', cfg.token ? 'set' : 'EMPTY — nothing is fetched'],
         ['Layer', LAYER_NAME],
         ['Markers', stats.targets + ' target / ' + stats.tandem + ' tandem / ' + stats.activity + ' dot / ' + stats.pressure + ' cell / ' + stats.beacons + ' beacon'],
-        ['Polls', stats.fetches + ' (failed ' + stats.fail + ')'],
+        ['Agents', cfg.agents ? cfg.agents : 'all (no filter)'],
+        [
+          'Relays',
+          stats.relaysSeen
+            ? stats.relaysAlive + ' alive / ' + stats.relaysSeen + ' in 30m' +
+              (stats.relaysAlive < stats.relaysSeen ? ' — a silent relay means holes in the data' : '')
+            : 'no heartbeat yet (needs relay 0.2.0+)',
+        ],
+        ['Polls', stats.fetches + ' (failed ' + stats.fail + ', 304 x' + stats.notModified + ')'],
         ['Last ok', stats.lastOk ? new Date(stats.lastOk).toLocaleTimeString() : '—'],
         ['Last error', stats.lastError || '—'],
       ];
@@ -341,6 +374,10 @@ function wrapper(plugin_info) {
         '<label><input id="opl-pressure" type="checkbox" ' + (cfg.showPressure ? 'checked' : '') + '> pressure cells</label> ' +
         '<label><input id="opl-beacons" type="checkbox" ' + (cfg.showBeacons ? 'checked' : '') + '> beacon countdown</label> ' +
         '<label><input id="opl-tandem" type="checkbox" ' + (cfg.showTandem ? 'checked' : '') + '> tandem badges</label></p>' +
+        '<p><b>Only these agents</b><br><input id="opl-agents" style="width:100%" value="' + esc(cfg.agents || '') +
+        '" placeholder="Acunet, Foo — empty = every agent"><br>' +
+        '<span style="opacity:.7">Filters activity dots and pressure cells on the backend. ' +
+        'Clear it to see the whole city again.</span></p>' +
         '<p style="opacity:.7">Read-only: this plugin draws backend intel, it never reports anything.</p>' +
         '</div>';
 
@@ -362,6 +399,11 @@ function wrapper(plugin_info) {
               cfg.refreshSeconds = Math.max(5, parseInt(get('opl-refresh'), 10) || 60);
               cfg.sinceMinutes = Math.max(1, parseInt(get('opl-since'), 10) || 60);
               cfg.minHits = Math.max(1, parseInt(get('opl-hits'), 10) || 3);
+              // names are comma separated; strip spaces so a paste of "A, B" works
+              cfg.agents = String(get('opl-agents') || '')
+                .split(/[,\s]+/)
+                .filter(Boolean)
+                .join(', ');
               cfg.showTargets = $('#opl-targets', $d).prop('checked');
               cfg.showActivity = $('#opl-activity', $d).prop('checked');
               cfg.showPressure = $('#opl-pressure', $d).prop('checked');

@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.1.0
+// @version        0.4.1
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.1.0';
+  var VERSION = '0.4.1';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -33,16 +33,25 @@ function wrapper(plugin_info) {
     token: '',
     agent: '',
     days: 7,
+    faction: '', // '' = both; enl/res only narrows the picker, the trail itself is per agent
   };
 
-  // triangle markers for the tail of the trail, so direction is readable without hovering
+  // Same look as player-activity-tracker: consecutive actions joined into one dashed path, faded and
+  // thinned by age, one marker on the newest position instead of a dot per action.
+  var PANE = 'activity-trail-pane';
+  var AGE_BUCKETS = 4;
+  var GAP_MS = 6 * 60 * 60 * 1000; // a night's sleep; a longer hole is a different trip
+  var MAX_POPUP_EVENTS = 10;
+
   var COLOURS = {
     ENLIGHTENED: '#03dc03',
     RESISTANCE: '#0088ff',
   };
+  var HOSTILE = { destroy: true, neutralize: true };
 
   var cfg = {};
   var layer = null;
+  var drawnBounds = null;
   var stats = { points: 0, loadedAt: null, failed: 0, lastError: '', days: 0 };
 
   function loadSettings() {
@@ -71,73 +80,138 @@ function wrapper(plugin_info) {
     return parts.length ? url + '?' + parts.join('&') : url;
   }
 
+  function agentOptions(rows) {
+    var html = '<option value="">' + rows.length + ' agent(s) in relay</option>';
+    rows.forEach(function (a) {
+      var tag = a.team === 'ENLIGHTENED' ? 'ENL' : a.team === 'RESISTANCE' ? 'RES' : '?';
+      html += '<option value="' + esc(a.agent_name) + '">' + esc(a.agent_name) + ' · ' + tag + ' · ' + (a.events || 0) + '</option>';
+    });
+    return html;
+  }
+
+  // Names come from the relay data (GET /v1/intel/agents), so the operator does not have to guess the
+  // exact COMM spelling — a wrong name just returns an empty trail.
+  function listAgents(faction) {
+    cfg.faction = faction || '';
+    var select = document.getElementById('tat-agent-list');
+    if (!select || !cfg.apiBase || !cfg.token) return Promise.resolve(false);
+    return fetch(apiUrl('/v1/intel/agents', { days: cfg.days, faction: cfg.faction }), {
+      headers: { 'X-Ops-Token': cfg.token },
+    })
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (body) {
+        select.innerHTML = agentOptions(body.agents || []);
+        return true;
+      })
+      .catch(function (err) {
+        select.innerHTML = '<option value="">agent list failed: ' + esc(err.message) + '</option>';
+        return false;
+      });
+  }
+
   function describe(row) {
     return row.action_type + ' ' + (row.portal_name || '') + ' — ' + new Date(row.recorded_at).toLocaleString();
   }
 
-  // A trail is only a path while the gaps are small; a two-hour hole is a different trip.
-  function splitIntoSegments(rows, maxGapMs) {
-    var segments = [];
-    var current = [];
-    var previous = null;
+  // Portal level colours, highlights and field fills live in overlayPane (z 400) and markerPane (z 600).
+  // The trail has to read on top of all of them, so it gets its own pane above that — but stays
+  // click-through, because it is a line, not a control.
+  function trailPane() {
+    if (!window.map || typeof window.map.createPane !== 'function' || typeof window.map.getPane !== 'function') return undefined;
+    if (!window.map.getPane(PANE)) {
+      var pane = window.map.createPane(PANE);
+      pane.style.zIndex = 650;
+      pane.style.pointerEvents = 'none';
+    }
+    return PANE;
+  }
+
+  function esc(text) {
+    return String(text).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function popupHtml(rows) {
+    var html = '<b>' + esc(rows[rows.length - 1].agent_name || '') + '</b>';
+    rows.slice(-MAX_POPUP_EVENTS).reverse().forEach(function (row) {
+      html += '<div>' + esc(describe(row)) + '</div>';
+    });
+    return html;
+  }
+
+  // One path per run of consecutive actions; the run breaks on a colour change or a hole too big to be
+  // one trip, and each path fades with age so the recent activity stands out from last week's.
+  function render(rows, days) {
+    layer.clearLayers();
+    if (!rows || !rows.length) return 0;
+
+    var now = Date.now();
+    var pane = trailPane();
+    var bucketMs = ((Number(days) || 1) * 86400000) / AGE_BUCKETS;
+    var team = (rows[rows.length - 1] || {}).team;
+    var colour = COLOURS[team] || '#ffff00';
+
+    var runs = [];
+    var run = null;
+    var lastPoint = null;
+    var lastAt = null;
+    var drawn = 0;
+    var bounds = L.latLngBounds([]); // the points as drawn: `layer.getBounds()` is unreliable on some renderers
+
     rows.forEach(function (row) {
       var lat = Number(row.lat);
       var lng = Number(row.lng);
       if (!isFinite(lat) || !isFinite(lng)) return;
       var at = new Date(row.recorded_at).getTime();
-      if (previous !== null && at - previous > maxGapMs) {
-        if (current.length > 1) segments.push(current);
-        current = [];
+      if (lastAt !== null && at - lastAt > GAP_MS) {
+        run = null;
+        lastPoint = null;
       }
-      current.push([lat, lng]);
-      previous = at;
-    });
-    if (current.length > 1) segments.push(current);
-    return segments;
-  }
-
-  function render(rows) {
-    layer.clearLayers();
-    if (!rows || !rows.length) return 0;
-
-    var drawn = 0;
-    var team = (rows[rows.length - 1] || {}).team;
-    var colour = COLOURS[team] || '#ffff00';
-
-    splitIntoSegments(rows, 45 * 60 * 1000).forEach(function (segment) {
-      L.polyline(segment, { color: colour, weight: 2, opacity: 0.65, dashArray: '5 5' }).addTo(layer);
-    });
-
-    rows.forEach(function (row) {
-      var lat = Number(row.lat);
-      var lng = Number(row.lng);
-      if (!isFinite(lat) || !isFinite(lng)) return;
-      var hostile = row.action_type === 'destroy' || row.action_type === 'neutralize';
-      L.circleMarker([lat, lng], {
-        radius: hostile ? 5 : 4,
-        color: hostile ? '#ff5555' : colour,
-        fillColor: hostile ? '#ff5555' : colour,
-        fillOpacity: 0.85,
-        weight: 1,
-      })
-        .bindPopup(describe(row))
-        .addTo(layer);
+      var age = Math.min(Math.max(Math.trunc((now - at) / bucketMs), 0), AGE_BUCKETS - 1);
+      var hostile = HOSTILE[row.action_type] === true;
+      var key = age + (hostile ? 'h' : '');
+      if (!run || run.key !== key) {
+        run = { key: key, age: age, hostile: hostile, points: lastPoint ? [lastPoint] : [] };
+        runs.push(run);
+      }
+      run.points.push([lat, lng]);
+      lastPoint = [lat, lng];
+      lastAt = at;
+      bounds.extend([lat, lng]);
       drawn++;
     });
 
-    // direction cue: the newest point gets a bigger halo
-    var last = rows[rows.length - 1];
-    if (last && isFinite(Number(last.lat))) {
-      L.circleMarker([Number(last.lat), Number(last.lng)], {
-        radius: 12,
-        color: colour,
+    runs.forEach(function (r) {
+      if (r.points.length < 2) return;
+      var weight = 2 - 0.25 * r.age;
+      // dark casing: the portal icons and level colours under this line would otherwise eat it
+      L.polyline(r.points, { color: '#000000', weight: weight + 2.5, opacity: 0.35, pane: pane, interactive: false }).addTo(layer);
+      L.polyline(r.points, {
+        color: r.hostile ? '#ff5555' : colour,
+        weight: weight,
+        opacity: 1 - 0.2 * r.age,
+        dashArray: '5,8',
+        pane: pane,
+        interactive: false,
+      }).addTo(layer);
+    });
+
+    if (lastPoint) {
+      L.circleMarker(lastPoint, {
+        radius: 7,
+        color: '#ffffff',
         weight: 2,
-        fill: false,
-        opacity: 0.9,
+        fillColor: colour,
+        fillOpacity: 0.9,
       })
-        .bindPopup('last seen: ' + describe(last))
+        .bindPopup(popupHtml(rows))
         .addTo(layer);
     }
+    drawnBounds = bounds.isValid() ? bounds : null;
     return drawn;
   }
 
@@ -147,7 +221,7 @@ function wrapper(plugin_info) {
     return stats.points + ' point(s), ' + ago + 's ago' + (stats.failed ? ', ' + stats.failed + ' failed' : '');
   }
 
-  function load() {
+  function load(fit) {
     if (!cfg.apiBase || !cfg.token || !cfg.agent) return Promise.resolve(false);
     var url = apiUrl('/v1/intel/agent/' + encodeURIComponent(cfg.agent) + '/trail', { days: cfg.days });
     return fetch(url, { headers: { 'X-Ops-Token': cfg.token } })
@@ -156,10 +230,14 @@ function wrapper(plugin_info) {
         return response.json();
       })
       .then(function (body) {
-        stats.points = render(body.trail || []);
+        stats.days = body.days || cfg.days;
+        stats.points = render(body.trail || [], stats.days);
         stats.loadedAt = Date.now();
         stats.lastError = '';
-        stats.days = body.days || cfg.days;
+        // a load that draws nothing visible reads as a broken plugin: switch the layer on
+        if (window.layerChooser && window.layerChooser.showLayer) window.layerChooser.showLayer(layer, true);
+        // and a trail three districts away is equally useless: only a deliberate Load re-centres the map
+        if (fit && drawnBounds && window.map && window.map.fitBounds) window.map.fitBounds(drawnBounds.pad(0.25));
         return true;
       })
       .catch(function (err) {
@@ -171,26 +249,37 @@ function wrapper(plugin_info) {
       });
   }
 
-  function openConfig() {
-    var html =
+  function configHtml() {
+    return (
       '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center">' +
       '<label>Endpoint</label><input id="tat-api" type="text" value="' + String(cfg.apiBase).replace(/"/g, '&quot;') + '">' +
       '<label>Token</label><input id="tat-token" type="password" value="' + String(cfg.token).replace(/"/g, '&quot;') + '">' +
       '<label>Agent</label><input id="tat-agent" type="text" value="' + String(cfg.agent).replace(/"/g, '&quot;') + '">' +
       '<label>Days</label><input id="tat-days" type="number" min="1" max="90" value="' + cfg.days + '">' +
+      '<label>Faction</label><select id="tat-faction" onchange="plugin.tacticalActivityTracker.listAgents(this.value)">' +
+      '<option value=""' + (cfg.faction ? '' : ' selected') + '>ENL + RES</option>' +
+      '<option value="enl"' + (cfg.faction === 'enl' ? ' selected' : '') + '>ENL only</option>' +
+      '<option value="res"' + (cfg.faction === 'res' ? ' selected' : '') + '>RES only</option>' +
+      '</select>' +
+      '<label>From relay</label><select id="tat-agent-list" ' +
+      'onchange="var a=document.getElementById(\'tat-agent\'); if (this.value && a) a.value = this.value">' +
+      '<option value="">…</option></select>' +
       '</div>' +
       '<p style="margin-top:8px">' +
       'Trail: ' +
       statusLine() +
-      (stats.lastError ? '<br><span style="color:#c00">last error: ' + stats.lastError + '</span>' : '') +
+      (stats.lastError ? '<br><span style="color:#c00">last error: ' + esc(stats.lastError) + '</span>' : '') +
       '</p>' +
       '<p style="opacity:.7">Reads /v1/intel/agent/{agent}/trail. Needs the relay running somewhere for the ' +
-      'window you ask for; an empty trail means nobody captured that agent, not that the agent was idle.</p>';
+      'window you ask for; an empty trail means nobody captured that agent, not that the agent was idle.</p>'
+    );
+  }
 
+  function openConfig() {
     dialog({
       id: 'tactical-activity-tracker',
       title: 'Activity Trail v' + VERSION,
-      html: html,
+      html: configHtml(),
       width: 460,
       buttons: {
         Load: function () {
@@ -200,10 +289,10 @@ function wrapper(plugin_info) {
             token: $.trim($('#tat-token', dlg).val()),
             agent: $.trim($('#tat-agent', dlg).val()),
             days: parseInt($('#tat-days', dlg).val(), 10) || 7,
+            faction: $('#tat-faction', dlg).val() || '',
           });
-          $(this).closest('.ui-dialog').find('.ui-dialog-content').html(html);
-          load().then(function () {
-            $('.ui-dialog .ui-dialog-content').last().html(html);
+          load(true).then(function () {
+            $('.ui-dialog .ui-dialog-content').last().html(configHtml());
           });
         },
         Close: function () {
@@ -211,6 +300,7 @@ function wrapper(plugin_info) {
         },
       },
     });
+    listAgents(cfg.faction);
   }
 
   thisPlugin.setup = function () {
@@ -229,12 +319,36 @@ function wrapper(plugin_info) {
       });
     }
 
+    // Mobile: the app menu is fixed (the toolbox does not exist there), so a drawer pane is the only
+    // way into the dialog. Picking a pane runs window.show(id) -> hideall(), and a custom pane has no
+    // view of its own: the plugin has to draw its UI and then hand the screen back to the map.
+    if (window.IS_DEVICE_MOBILE && window.app && typeof window.app.addPane === 'function') {
+      try {
+        window.app.addPane('activity-trail', 'Activity Trail', 'layers');
+        window.addHook('paneChanged', function (id) {
+          if (id !== 'activity-trail') return;
+          try {
+            openConfig();
+          } catch (e) {
+            stats.lastError = 'config dialog: ' + ((e && e.message) || e);
+            console.warn('tactical-activity-tracker: ' + stats.lastError);
+          }
+          setTimeout(function () {
+            if (window.show) window.show('map');
+          }, 60);
+        });
+      } catch (e) {
+        console.warn('tactical-activity-tracker: pane registration failed — ' + ((e && e.message) || e));
+      }
+    }
+
     if (cfg.enabled && cfg.agent && cfg.token) load();
 
     thisPlugin.state = function () {
       return { cfg: cfg, stats: stats };
     };
     thisPlugin.load = load;
+    thisPlugin.listAgents = listAgents;
     thisPlugin.render = render;
     thisPlugin.layer = layer;
     console.log('tactical-activity-tracker: ready (v' + VERSION + ')');

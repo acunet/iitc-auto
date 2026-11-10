@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.1.2
+// @version        0.2.1
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,8 +18,11 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.1.2';
+  var VERSION = '0.2.1';
   var LS_KEY = 'plugin-tactical-relay-settings';
+  // A stuck POST would keep the queue in flight forever and then every later event is dropped.
+  var SEND_TIMEOUT_MS = 20000;
+  var HEARTBEAT_MIN_MS = 60000; // a hand-edited value below this is clamped: no hammering the backend
   var started = false;
 
   // Matched against the joined TEXT markup, padded with spaces, first match wins.
@@ -47,6 +50,7 @@ function wrapper(plugin_info) {
     backgroundComm: true, // keep COMM polled while the chat tab is closed (mobile sits on map)
     dumpComm: false, // learn mode: log every parsed event verbatim
     maxQueue: 500,
+    heartbeatMinutes: 5, // liveness ping; 0 disables it. Deliberately slow: it is a status row, not telemetry
     factions: 'any', // any | enl | res
     phrases: {},
   };
@@ -114,7 +118,12 @@ function wrapper(plugin_info) {
 
     function push(ev) {
       items.push(ev);
-      if (items.length > opts.max) items.splice(0, items.length - opts.max);
+      if (items.length > opts.max) {
+        // the backend has been unreachable long enough to overflow the buffer: lose the oldest, but
+        // say so — a silent splice is how "we relayed nothing for an hour" goes unnoticed
+        opts.onDrop(items.length - opts.max);
+        items.splice(0, items.length - opts.max);
+      }
       schedule();
     }
 
@@ -137,6 +146,7 @@ function wrapper(plugin_info) {
         .catch(function (err) {
           // bounded re-queue: telemetry may be late, never unbounded in memory
           if (items.length + batch.length <= opts.max) items = batch.concat(items);
+          else opts.onDrop(batch.length); // the buffer is full: this batch is gone, count it
           opts.onError(err);
         })
         .then(function () {
@@ -160,8 +170,10 @@ function wrapper(plugin_info) {
     if (started) return; // bootPlugins + iitcLoaded can both fire; setup must run once
     started = true;
     var cfg = loadSettings();
-    var stats = { parsed: 0, queued: 0, sent: 0, failed: 0, lastError: '', lastSend: 0 };
+    var stats = { parsed: 0, queued: 0, sent: 0, failed: 0, dropped: 0, lastBeat: 0, lastError: '', lastSend: 0 };
     var seen = {}; // comm guid -> ms, pruned on every hook payload
+    var relayId = relayIdentity(); // stable per install: the id is what a status row is anchored to
+    var heartbeatTimer = null;
 
     var queue = createQueue({
       windowMs: Math.max(1, cfg.flushSeconds) * 1000,
@@ -182,6 +194,12 @@ function wrapper(plugin_info) {
         stats.lastError = String((err && err.message) || err);
         console.warn('tactical-relay: send failed — ' + stats.lastError);
       },
+      onDrop: function (n) {
+        // events that never reached the backend: the only number that matters when "data has holes"
+        stats.dropped += n;
+        stats.lastError = 'dropped ' + stats.dropped + ' event(s) — queue full while the backend was unreachable';
+        console.warn('tactical-relay: ' + stats.lastError);
+      },
       send: function (batch) {
         return sendPost('/v1/comm/batch', { events: batch }).then(function (body) {
           return body && body.inserted != null ? body.inserted : batch.length;
@@ -193,13 +211,69 @@ function wrapper(plugin_info) {
       return String(cfg.apiBase || '').replace(/\/+$/, '');
     }
 
+    function relayIdentity() {
+      var key = 'plugin-tactical-relay-id';
+      try {
+        var saved = window.localStorage.getItem(key);
+        if (saved) return saved;
+        var made = 'r-' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+        window.localStorage.setItem(key, made);
+        return made;
+      } catch (e) {
+        return 'r-nostorage-' + Math.random().toString(36).slice(2, 8);
+      }
+    }
+
+    // One small POST per `heartbeatMinutes`, no retry: if it fails, the next tick tries again. It
+    // carries counters only — no agent names, no positions — so a lost ping costs nothing.
+    function heartbeat() {
+      var minutes = Number(cfg.heartbeatMinutes);
+      if (!cfg.enabled || cfg.dryRun || !cfg.apiBase || !cfg.token) return Promise.resolve(false);
+      if (!(minutes > 0)) return Promise.resolve(false);
+      var body = {
+        relay_id: relayId,
+        version: VERSION,
+        sent: stats.sent,
+        dropped: stats.dropped,
+        failed: stats.failed,
+        queued: queue.size(),
+      };
+      return sendPost('/v1/relay/heartbeat', body)
+        .then(function () {
+          stats.lastBeat = Date.now();
+          return true;
+        })
+        .catch(function (err) {
+          // silent by design: a missing beat shows up as silence in the status list, not as an error
+          console.warn('tactical-relay: heartbeat failed — ' + ((err && err.message) || err));
+          return false;
+        });
+    }
+
+    function scheduleHeartbeat() {
+      var minutes = Number(cfg.heartbeatMinutes);
+      if (!(minutes > 0) || heartbeatTimer) return;
+      var every = Math.max(HEARTBEAT_MIN_MS, minutes * 60000);
+      // no ping at boot: a reload must not look like a fresh relay, and the first beat is 5 minutes in
+      heartbeatTimer = setInterval(heartbeat, every);
+    }
+
     function sendPost(path, body) {
+      // Without a timeout a stalled request keeps `inflight` true forever: the queue fills, then every
+      // later event is dropped. Older WebViews have no AbortSignal.timeout, hence the try/catch.
+      var signal;
+      try {
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
+      } catch (e) {
+        signal = undefined;
+      }
       return fetch(baseUrl() + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Ops-Token': cfg.token },
         body: JSON.stringify(body),
         credentials: 'omit',
         cache: 'no-store',
+        signal: signal,
       }).then(function (res) {
         if (!res.ok) throw new Error('HTTP ' + res.status + ' on ' + path);
         return res.json().catch(function () {
@@ -279,6 +353,8 @@ function wrapper(plugin_info) {
       }
     }
 
+    scheduleHeartbeat(); // every heartbeatMinutes (min 60 s); heartbeatMinutes: 0 disables it
+
     // ------------------------------------------------------------------ UI ---
 
     function statusHtml() {
@@ -288,7 +364,13 @@ function wrapper(plugin_info) {
         ['Mode', cfg.dryRun ? 'DRY-RUN' : 'LIVE'],
         ['Queued', queue.size() + ' / ' + cfg.maxQueue],
         ['Parsed', String(stats.parsed)],
-        ['Sent', stats.sent + ' / failed ' + stats.failed],
+        ['Sent', stats.sent + ' / failed ' + stats.failed + ' / dropped ' + stats.dropped],
+        [
+          'Heartbeat',
+          Number(cfg.heartbeatMinutes) > 0
+            ? cfg.heartbeatMinutes + 'm · ' + relayId + (stats.lastBeat ? ' · ok' : ' · not yet')
+            : 'off',
+        ],
         ['Last send', stats.lastSend ? new Date(stats.lastSend).toLocaleTimeString() : '—'],
         ['Last error', stats.lastError || '—'],
       ];
@@ -382,8 +464,9 @@ function wrapper(plugin_info) {
     }
 
     thisPlugin.state = function () {
-      return { cfg: cfg, stats: stats, queue: queue.size() };
+      return { cfg: cfg, stats: stats, queue: queue.size(), relayId: relayId };
     };
+    thisPlugin.heartbeat = heartbeat;
     thisPlugin.queue = queue;
     console.log('tactical-relay: ready (v' + VERSION + ')');
   };
