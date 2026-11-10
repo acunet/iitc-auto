@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.1
+// @version        0.4.2
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.1';
+  var VERSION = '0.4.2';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -222,7 +222,13 @@ function wrapper(plugin_info) {
   }
 
   function load(fit) {
-    if (!cfg.apiBase || !cfg.token || !cfg.agent) return Promise.resolve(false);
+    // The trail endpoint is per agent, so an empty Agent field is the one failure the operator hits
+    // most: say it, instead of returning false and draining the dialog of any feedback.
+    if (!cfg.agent) {
+      stats.lastError = 'pick an agent first: a trail is one agent, faction only narrows the list';
+      return Promise.resolve(false);
+    }
+    if (!cfg.apiBase || !cfg.token) return Promise.resolve(false);
     var url = apiUrl('/v1/intel/agent/' + encodeURIComponent(cfg.agent) + '/trail', { days: cfg.days });
     return fetch(url, { headers: { 'X-Ops-Token': cfg.token } })
       .then(function (response) {
@@ -256,22 +262,23 @@ function wrapper(plugin_info) {
       '<label>Token</label><input id="tat-token" type="password" value="' + String(cfg.token).replace(/"/g, '&quot;') + '">' +
       '<label>Agent</label><input id="tat-agent" type="text" value="' + String(cfg.agent).replace(/"/g, '&quot;') + '">' +
       '<label>Days</label><input id="tat-days" type="number" min="1" max="90" value="' + cfg.days + '">' +
-      '<label>Faction</label><select id="tat-faction" onchange="plugin.tacticalActivityTracker.listAgents(this.value)">' +
+      '<label>From relay</label><span><select id="tat-faction" title="narrows the list below, not the map" onchange="plugin.tacticalActivityTracker.listAgents(this.value)">' +
       '<option value=""' + (cfg.faction ? '' : ' selected') + '>ENL + RES</option>' +
       '<option value="enl"' + (cfg.faction === 'enl' ? ' selected' : '') + '>ENL only</option>' +
       '<option value="res"' + (cfg.faction === 'res' ? ' selected' : '') + '>RES only</option>' +
-      '</select>' +
-      '<label>From relay</label><select id="tat-agent-list" ' +
+      '</select> ' +
+      '<select id="tat-agent-list" ' +
       'onchange="var a=document.getElementById(\'tat-agent\'); if (this.value && a) a.value = this.value">' +
-      '<option value="">…</option></select>' +
+      '<option value="">…</option></select></span>' +
       '</div>' +
       '<p style="margin-top:8px">' +
       'Trail: ' +
       statusLine() +
       (stats.lastError ? '<br><span style="color:#c00">last error: ' + esc(stats.lastError) + '</span>' : '') +
       '</p>' +
-      '<p style="opacity:.7">Reads /v1/intel/agent/{agent}/trail. Needs the relay running somewhere for the ' +
-      'window you ask for; an empty trail means nobody captured that agent, not that the agent was idle.</p>'
+      '<p style="opacity:.7">Faction narrows the <b>list</b>, it does not filter the map: a trail is always one ' +
+      'agent\'s path (GET /v1/intel/agent/{agent}/trail). To see several agents at once use Ops Overlay. ' +
+      'An empty trail means nobody relayed that agent, not that the agent was idle.</p>'
     );
   }
 
@@ -293,6 +300,9 @@ function wrapper(plugin_info) {
           });
           load(true).then(function () {
             $('.ui-dialog .ui-dialog-content').last().html(configHtml());
+            // re-rendering the html above resets the picker to "…": refill it, or the list looks
+            // like it failed every time you press Load
+            listAgents(cfg.faction);
           });
         },
         Close: function () {
