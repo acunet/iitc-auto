@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.3
+// @version        0.4.4
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.3';
+  var VERSION = '0.4.4';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -80,11 +80,28 @@ function wrapper(plugin_info) {
     return parts.length ? url + '?' + parts.join('&') : url;
   }
 
+  function sinceAgo(iso) {
+    var at = Date.parse(iso);
+    if (isNaN(at)) return '';
+    var m = Math.round((Date.now() - at) / 60000);
+    if (m < 1) return 'now';
+    if (m < 60) return m + 'm ago';
+    if (m < 1440) return Math.round(m / 60) + 'h ago';
+    return Math.round(m / 1440) + 'd ago';
+  }
+
   function agentOptions(rows) {
+    // Most recently seen first: the operator opens this to find who is moving NOW. Server order is
+    // 7-day volume, which buries an agent active a minute ago under one that was busy last week.
+    var sorted = rows.slice().sort(function (a, b) {
+      return (Date.parse(b.last_seen) || 0) - (Date.parse(a.last_seen) || 0);
+    });
     var html = '<option value="">' + rows.length + ' agent(s) in relay</option>';
-    rows.forEach(function (a) {
+    sorted.forEach(function (a) {
       var tag = a.team === 'ENLIGHTENED' ? 'ENL' : a.team === 'RESISTANCE' ? 'RES' : '?';
-      html += '<option value="' + esc(a.agent_name) + '">' + esc(a.agent_name) + ' · ' + tag + ' · ' + (a.events || 0) + '</option>';
+      html +=
+        '<option value="' + esc(a.agent_name) + '">' + esc(a.agent_name) + ' · ' + tag + ' · ' +
+        sinceAgo(a.last_seen) + ' · ' + (a.events || 0) + '</option>';
     });
     return html;
   }
@@ -103,7 +120,12 @@ function wrapper(plugin_info) {
         return response.json();
       })
       .then(function (body) {
+        // a refresh must not wipe the pick: keep the operator's choice visible
+        var keep = select.value;
         select.innerHTML = agentOptions(body.agents || []);
+        if (keep && typeof select.querySelector === 'function' && select.querySelector('option[value="' + keep.replace(/(["\\])/g, '\\$1') + '"]')) {
+          select.value = keep;
+        }
         return true;
       })
       .catch(function (err) {
@@ -111,6 +133,25 @@ function wrapper(plugin_info) {
         return false;
       });
   }
+
+  // The list is a live view, not a snapshot taken when the dialog opened: a new agent moving now has
+  // to appear without closing and reopening. Only runs while the select exists (dialog is open).
+  var pickerTimer = null;
+  function startPickerRefresh() {
+    if (pickerTimer || typeof setInterval !== 'function') return;
+    pickerTimer = setInterval(function () {
+      if (!document.getElementById('tat-agent-list')) {
+        stopPickerRefresh();
+        return;
+      }
+      listAgents(cfg.faction);
+    }, 30000);
+  }
+  function stopPickerRefresh() {
+    if (pickerTimer && typeof clearInterval === 'function') clearInterval(pickerTimer);
+    pickerTimer = null;
+  }
+
 
   function describe(row) {
     return row.action_type + ' ' + (row.portal_name || '') + ' — ' + new Date(row.recorded_at).toLocaleString();
@@ -255,6 +296,25 @@ function wrapper(plugin_info) {
       });
   }
 
+  // A drawn trail is a live view. Without this the line stays exactly as it was drawn until the
+  // operator presses Load again, so new actions never appear - which reads as "the plugin is stale".
+  var trailTimer = null;
+  function startTrailRefresh() {
+    if (trailTimer || !cfg.enabled || !cfg.agent || !cfg.token) return;
+    if (typeof setInterval !== 'function') return;
+    trailTimer = setInterval(function () {
+      if (trailTimer === null) return;
+      // shortcut: poll only while the line is on the map; a hidden layer costs nothing until it is
+      // switched on (then Load picks up the gap). Upgrade if a stale first paint after re-enabling matters.
+      if (window.map && typeof window.map.hasLayer === 'function' && !window.map.hasLayer(layer)) return;
+      load(false); // never fitBounds on a background refresh: it would yank the operator's map
+    }, 60000);
+  }
+  function stopTrailRefresh() {
+    if (trailTimer && typeof clearInterval === 'function') clearInterval(trailTimer);
+    trailTimer = null;
+  }
+
   function configHtml() {
     return (
       '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center">' +
@@ -299,6 +359,8 @@ function wrapper(plugin_info) {
       title: 'Activity Trail v' + VERSION,
       html: configHtml(),
       width: 460,
+      // any close path (X button, ESC, another plugin's pane switch) must stop the poll
+      closeCallback: stopPickerRefresh,
       buttons: {
         Load: function () {
           var dlg = $(this).closest('.ui-dialog');
@@ -314,14 +376,17 @@ function wrapper(plugin_info) {
             // re-rendering the html above resets the picker to "…": refill it, or the list looks
             // like it failed every time you press Load
             listAgents(cfg.faction);
+            startTrailRefresh();
           });
         },
         Close: function () {
+          stopPickerRefresh();
           $(this).closest('.ui-dialog').dialog('close');
         },
       },
     });
     listAgents(cfg.faction);
+    startPickerRefresh();
   }
 
   thisPlugin.setup = function () {
@@ -364,7 +429,7 @@ function wrapper(plugin_info) {
       }
     }
 
-    if (cfg.enabled && cfg.agent && cfg.token) load();
+    if (cfg.enabled && cfg.agent && cfg.token) load().then(startTrailRefresh);
 
     thisPlugin.state = function () {
       return { cfg: cfg, stats: stats };
