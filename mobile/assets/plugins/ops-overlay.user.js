@@ -2,7 +2,7 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.3.1
+// @version        0.3.2
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.3.1';
+  var VERSION = '0.3.2';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -359,6 +359,17 @@ function wrapper(plugin_info) {
       return html + '</table>';
     }
 
+  // A pane switch replaces the whole screen, but a jQuery UI dialog is not tied to a pane: without
+  // this the previous plugin's config stays on top and the new pane looks empty/ignored.
+  function closePluginDialogs() {
+    if (typeof $ !== 'function') return;
+    var open = $('.ui-dialog-content');
+    if (!open || !open.length) return;
+    open.each(function () {
+      if ($(this).data('ui-dialog')) $(this).dialog('close');
+    });
+  }
+
     function openConfig() {
       var width = window.IS_DEVICE_MOBILE ? 360 : 480;
       var html =
@@ -436,7 +447,9 @@ function wrapper(plugin_info) {
         window.app.addPane('ops-overlay', 'Ops Layer', 'layers');
         window.addHook('paneChanged', function (id) {
           if (id !== 'ops-overlay') return;
-          try {
+try {
+            closePluginDialogs();
+
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);

@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.2
+// @version        0.4.3
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.2';
+  var VERSION = '0.4.3';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -282,6 +282,17 @@ function wrapper(plugin_info) {
     );
   }
 
+  // A pane switch replaces the whole screen, but a jQuery UI dialog is not tied to a pane: without
+  // this the previous plugin's config stays on top and the new pane looks empty/ignored.
+  function closePluginDialogs() {
+    if (typeof $ !== 'function') return;
+    var open = $('.ui-dialog-content');
+    if (!open || !open.length) return;
+    open.each(function () {
+      if ($(this).data('ui-dialog')) $(this).dialog('close');
+    });
+  }
+
   function openConfig() {
     dialog({
       id: 'tactical-activity-tracker',
@@ -337,7 +348,9 @@ function wrapper(plugin_info) {
         window.app.addPane('activity-trail', 'Activity Trail', 'layers');
         window.addHook('paneChanged', function (id) {
           if (id !== 'activity-trail') return;
-          try {
+try {
+            closePluginDialogs();
+
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);

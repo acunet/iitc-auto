@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.2.1
+// @version        0.2.2
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.2.1';
+  var VERSION = '0.2.2';
   var LS_KEY = 'plugin-tactical-relay-settings';
   // A stuck POST would keep the queue in flight forever and then every later event is dropped.
   var SEND_TIMEOUT_MS = 20000;
@@ -385,6 +385,17 @@ function wrapper(plugin_info) {
       });
     }
 
+  // A pane switch replaces the whole screen, but a jQuery UI dialog is not tied to a pane: without
+  // this the previous plugin's config stays on top and the new pane looks empty/ignored.
+  function closePluginDialogs() {
+    if (typeof $ !== 'function') return;
+    var open = $('.ui-dialog-content');
+    if (!open || !open.length) return;
+    open.each(function () {
+      if ($(this).data('ui-dialog')) $(this).dialog('close');
+    });
+  }
+
     function openConfig() {
       var width = window.IS_DEVICE_MOBILE ? 360 : 480;
       var html =
@@ -448,7 +459,9 @@ function wrapper(plugin_info) {
         window.app.addPane('tactical-relay', 'Relay', 'notifications');
         window.addHook('paneChanged', function (id) {
           if (id !== 'tactical-relay') return;
-          try {
+try {
+            closePluginDialogs();
+
             openConfig();
           } catch (e) {
             stats.lastError = 'config dialog: ' + ((e && e.message) || e);
