@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.4
+// @version        0.4.5
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.4';
+  var VERSION = '0.4.5';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -34,6 +34,7 @@ function wrapper(plugin_info) {
     agent: '',
     days: 7,
     faction: '', // '' = both; enl/res only narrows the picker, the trail itself is per agent
+    day: '', // '' = the whole window; otherwise a local YYYY-MM-DD to draw one day at a time
   };
 
   // Same look as player-activity-tracker: consecutive actions joined into one dashed path, faded and
@@ -52,7 +53,7 @@ function wrapper(plugin_info) {
   var cfg = {};
   var layer = null;
   var drawnBounds = null;
-  var stats = { points: 0, loadedAt: null, failed: 0, lastError: '', days: 0 };
+  var stats = { points: 0, loadedAt: null, failed: 0, lastError: '', days: 0, rows: [] };
 
   function loadSettings() {
     var stored = {};
@@ -184,15 +185,54 @@ function wrapper(plugin_info) {
     return html;
   }
 
+  // Local calendar day of an instant: the operator thinks in "today/yesterday", and the phone's own
+  // timezone is what the dialog should agree with (recorded_at is UTC).
+  function dayKeyOf(value) {
+    var d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+
+  function dayStartMs(key) {
+    var parts = String(key).split('-');
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).getTime();
+  }
+
+  function dayLabel(key) {
+    var start = dayStartMs(key);
+    var today = dayKeyOf(Date.now());
+    var yesterday = dayKeyOf(Date.now() - 86400000);
+    if (key === today) return 'Today';
+    if (key === yesterday) return 'Yesterday';
+    return new Date(start).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  }
+
   // One path per run of consecutive actions; the run breaks on a colour change or a hole too big to be
   // one trip, and each path fades with age so the recent activity stands out from last week's.
-  function render(rows, days) {
+  // A single day is drawn against that day's own span: with the whole-window bucket every point of
+  // yesterday would land in the faintest bucket and the whole day would look dead.
+  function render(rows, days, onlyDay) {
     layer.clearLayers();
     if (!rows || !rows.length) return 0;
+
+    var all = rows;
+    if (onlyDay) {
+      rows = all.filter(function (r) {
+        return dayKeyOf(r.recorded_at) === onlyDay;
+      });
+      if (!rows.length) return 0;
+    }
 
     var now = Date.now();
     var pane = trailPane();
     var bucketMs = ((Number(days) || 1) * 86400000) / AGE_BUCKETS;
+    if (onlyDay) {
+      var dayStart = dayStartMs(onlyDay);
+      var dayEnd = dayStart + 86400000;
+      var span = Math.max(3600000, Math.min(now, dayEnd) - dayStart); // today: from midnight to now
+      now = Math.min(now, dayEnd);
+      bucketMs = span / AGE_BUCKETS;
+    }
     var team = (rows[rows.length - 1] || {}).team;
     var colour = COLOURS[team] || '#ffff00';
 
@@ -256,6 +296,18 @@ function wrapper(plugin_info) {
     return drawn;
   }
 
+  // Switching days must not hit the network: a week of one agent is already in `stats.rows`, and the
+  // whole point is to flip between days while looking at the map.
+  function drawDay(day) {
+    cfg.day = day || '';
+    saveSettings({ day: cfg.day });
+    stats.points = render(stats.rows, stats.days || cfg.days, cfg.day);
+    if (window.layerChooser && window.layerChooser.showLayer) window.layerChooser.showLayer(layer, true);
+    var status = document.getElementById('tat-status');
+    if (status) status.innerHTML = 'Trail: ' + statusLine();
+    return stats.points;
+  }
+
   function statusLine() {
     if (!stats.loadedAt) return 'not loaded';
     var ago = Math.round((Date.now() - stats.loadedAt) / 1000);
@@ -278,7 +330,8 @@ function wrapper(plugin_info) {
       })
       .then(function (body) {
         stats.days = body.days || cfg.days;
-        stats.points = render(body.trail || [], stats.days);
+        stats.rows = body.trail || [];
+        stats.points = render(stats.rows, stats.days, cfg.day);
         stats.loadedAt = Date.now();
         stats.lastError = '';
         // a load that draws nothing visible reads as a broken plugin: switch the layer on
@@ -315,6 +368,24 @@ function wrapper(plugin_info) {
     trailTimer = null;
   }
 
+  // Only days that actually have actions, newest first: a day with nothing in it would draw nothing and
+  // read as a broken filter. "All N days" stays first because it is the overview.
+  function daySelectHtml() {
+    var counts = {};
+    (stats.rows || []).forEach(function (r) {
+      var key = dayKeyOf(r.recorded_at);
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    });
+    var keys = Object.keys(counts).sort().reverse();
+    var html = '<option value=""' + (cfg.day ? '' : ' selected') + '>All ' + (stats.days || cfg.days) + ' days</option>';
+    keys.forEach(function (key) {
+      html +=
+        '<option value="' + key + '"' + (cfg.day === key ? ' selected' : '') + '>' +
+        esc(dayLabel(key)) + ' · ' + counts[key] + '</option>';
+    });
+    return html;
+  }
+
   function configHtml() {
     return (
       '<div style="display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center">' +
@@ -322,6 +393,9 @@ function wrapper(plugin_info) {
       '<label>Token</label><input id="tat-token" type="password" value="' + String(cfg.token).replace(/"/g, '&quot;') + '">' +
       '<label>Agent</label><input id="tat-agent" type="text" value="' + String(cfg.agent).replace(/"/g, '&quot;') + '">' +
       '<label>Days</label><input id="tat-days" type="number" min="1" max="90" value="' + cfg.days + '">' +
+      '<label>Day</label><select id="tat-day" onchange="plugin.tacticalActivityTracker.drawDay(this.value)">' +
+      daySelectHtml() +
+      '</select>' +
       '<label>From relay</label><span><select id="tat-faction" title="narrows the list below, not the map" onchange="plugin.tacticalActivityTracker.listAgents(this.value)">' +
       '<option value=""' + (cfg.faction ? '' : ' selected') + '>ENL + RES</option>' +
       '<option value="enl"' + (cfg.faction === 'enl' ? ' selected' : '') + '>ENL only</option>' +
@@ -331,7 +405,7 @@ function wrapper(plugin_info) {
       'onchange="var a=document.getElementById(\'tat-agent\'); if (this.value && a) a.value = this.value">' +
       '<option value="">…</option></select></span>' +
       '</div>' +
-      '<p style="margin-top:8px">' +
+      '<p style="margin-top:8px" id="tat-status">' +
       'Trail: ' +
       statusLine() +
       (stats.lastError ? '<br><span style="color:#c00">last error: ' + esc(stats.lastError) + '</span>' : '') +
@@ -437,6 +511,7 @@ function wrapper(plugin_info) {
     thisPlugin.load = load;
     thisPlugin.listAgents = listAgents;
     thisPlugin.render = render;
+    thisPlugin.drawDay = drawDay;
     thisPlugin.layer = layer;
     console.log('tactical-activity-tracker: ready (v' + VERSION + ')');
   };
