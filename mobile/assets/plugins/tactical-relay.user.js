@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.2.2
+// @version        0.2.3
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.2.2';
+  var VERSION = '0.2.3';
   var LS_KEY = 'plugin-tactical-relay-settings';
   // A stuck POST would keep the queue in flight forever and then every later event is dropped.
   var SEND_TIMEOUT_MS = 20000;
@@ -51,6 +51,10 @@ function wrapper(plugin_info) {
     dumpComm: false, // learn mode: log every parsed event verbatim
     maxQueue: 500,
     heartbeatMinutes: 5, // liveness ping; 0 disables it. Deliberately slow: it is a status row, not telemetry
+    // IITC goes idle after MAX_IDLE_TIME (15 min) without input, and idle stops chat.request - i.e. COMM
+    // stops being polled and the relay goes deaf. An unattended phone (Redfinger) therefore needs a
+    // nudge well inside that window; 10 min is the slowest safe value. 0 disables it.
+    keepAliveMinutes: 10,
     factions: 'any', // any | enl | res
     phrases: {},
   };
@@ -174,6 +178,7 @@ function wrapper(plugin_info) {
     var seen = {}; // comm guid -> ms, pruned on every hook payload
     var relayId = relayIdentity(); // stable per install: the id is what a status row is anchored to
     var heartbeatTimer = null;
+    var keepAliveTimer = null;
 
     var queue = createQueue({
       windowMs: Math.max(1, cfg.flushSeconds) * 1000,
@@ -256,6 +261,29 @@ function wrapper(plugin_info) {
       var every = Math.max(HEARTBEAT_MIN_MS, minutes * 60000);
       // no ping at boot: a reload must not look like a fresh relay, and the first beat is 5 minutes in
       heartbeatTimer = setInterval(heartbeat, every);
+    }
+
+    // window.idleReset() clears the idle counter, so the page never reaches MAX_IDLE_TIME. Without it an
+    // unattended phone silently stops polling COMM ~15 min in: the heartbeat keeps claiming the relay is
+    // alive while no new event ever arrives. It must run *inside* that window, hence the 15-minute cap.
+    function keepAlive() {
+      if (!cfg.enabled || !(Number(cfg.keepAliveMinutes) > 0)) return;
+      if (typeof window.idleReset !== 'function') return;
+      window.idleReset();
+      stats.keepAlives = (stats.keepAlives || 0) + 1;
+    }
+
+    function scheduleKeepAlive() {
+      var minutes = Number(cfg.keepAliveMinutes);
+      if (keepAliveTimer) return;
+      if (!(minutes > 0)) return;
+      var every = Math.max(1, Math.min(minutes, 14)) * 60000; // at least 1 min, at most 14: past that IITC is already idle
+      keepAliveTimer = setInterval(keepAlive, every);
+    }
+
+    function stopKeepAlive() {
+      if (keepAliveTimer && typeof clearInterval === 'function') clearInterval(keepAliveTimer);
+      keepAliveTimer = null;
     }
 
     function sendPost(path, body) {
@@ -354,6 +382,7 @@ function wrapper(plugin_info) {
     }
 
     scheduleHeartbeat(); // every heartbeatMinutes (min 60 s); heartbeatMinutes: 0 disables it
+    scheduleKeepAlive(); // keeps IITC out of idle mode, so COMM keeps being polled on an unattended phone
 
     // ------------------------------------------------------------------ UI ---
 
@@ -370,6 +399,12 @@ function wrapper(plugin_info) {
           Number(cfg.heartbeatMinutes) > 0
             ? cfg.heartbeatMinutes + 'm · ' + relayId + (stats.lastBeat ? ' · ok' : ' · not yet')
             : 'off',
+        ],
+        [
+          'Keep-alive',
+          Number(cfg.keepAliveMinutes) > 0
+            ? Math.min(Number(cfg.keepAliveMinutes), 14) + 'm (' + (stats.keepAlives || 0) + ' nudge)' + (window.isIdle && window.isIdle() ? ' — IDLE NOW' : '')
+            : 'off — IITC idles after 15m and COMM stops',
         ],
         ['Last send', stats.lastSend ? new Date(stats.lastSend).toLocaleTimeString() : '—'],
         ['Last error', stats.lastError || '—'],
@@ -406,6 +441,8 @@ function wrapper(plugin_info) {
         '<p><b>Flush seconds</b> <input id="trl-flush" size="3" value="' + esc(cfg.flushSeconds) + '"> ' +
         '<label><input id="trl-dry" type="checkbox" ' + (cfg.dryRun ? 'checked' : '') + '> dry-run</label> ' +
         '<label><input id="trl-dump" type="checkbox" ' + (cfg.dumpComm ? 'checked' : '') + '> dump COMM</label></p>' +
+        '<p><b>Keep-alive minutes</b> <input id="trl-keepalive" size="3" value="' + esc(cfg.keepAliveMinutes) + '"> ' +
+        '<span style="opacity:.7">0 = off. Must stay under 15: IITC goes idle after 15 min without input and stops polling COMM.</span></p>' +
         '<p style="opacity:.75">Faction filter: <select id="trl-factions">' +
         ['any', 'enl', 'res'].map(function (v) { return '<option value="' + v + '"' + (cfg.factions === v ? ' selected' : '') + '>' + v + '</option>'; }).join('') +
         '</select></p>' +
@@ -428,7 +465,10 @@ function wrapper(plugin_info) {
               cfg.dryRun = $('#trl-dry', $d).prop('checked');
               cfg.dumpComm = $('#trl-dump', $d).prop('checked');
               cfg.factions = get('trl-factions') || 'any';
+              cfg.keepAliveMinutes = Math.max(0, Math.min(14, parseInt(get('trl-keepalive'), 10) || 0));
               saveSettings(cfg);
+              stopKeepAlive();
+              scheduleKeepAlive();
               console.log('tactical-relay: settings saved (dryRun=' + cfg.dryRun + ')');
               $(this).dialog('close');
             },
@@ -479,6 +519,7 @@ function wrapper(plugin_info) {
       return { cfg: cfg, stats: stats, queue: queue.size(), relayId: relayId };
     };
     thisPlugin.heartbeat = heartbeat;
+    thisPlugin.keepAlive = keepAlive;
     thisPlugin.queue = queue;
     console.log('tactical-relay: ready (v' + VERSION + ')');
   };
