@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.5
+// @version        0.4.6
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.5';
+  var VERSION = '0.4.6';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -43,6 +43,19 @@ function wrapper(plugin_info) {
   var AGE_BUCKETS = 4;
   var GAP_MS = 6 * 60 * 60 * 1000; // a night's sleep; a longer hole is a different trip
   var MAX_POPUP_EVENTS = 10;
+
+  // Two consecutive actions further apart than this imply a speed no agent reaches between portals
+  // (a car in Jakarta averages well under 100 km/h). Such a point is a multi-portal event recorded at the
+  // wrong end - a link's far endpoint - not movement, and must not stretch the line across the city.
+  var MAX_LEG_KM = 25;
+  var MIN_LEG_MINUTES = 6; // 25 km in under 6 min is >250 km/h
+
+  function kmBetween(a, b) {
+    if (!a || !b) return 0;
+    var dy = (a[0] - b[0]) * 111.32;
+    var dx = (a[1] - b[1]) * 111.32 * Math.cos((a[0] * Math.PI) / 180);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
 
   var COLOURS = {
     ENLIGHTENED: '#03dc03',
@@ -251,6 +264,15 @@ function wrapper(plugin_info) {
       if (lastAt !== null && at - lastAt > GAP_MS) {
         run = null;
         lastPoint = null;
+      }
+      // a jump no car could make is a mis-recorded multi-portal event: start a new run instead of
+      // drawing a line that pretends the agent travelled there
+      if (lastPoint && lastAt !== null) {
+        var mins = (at - lastAt) / 60000;
+        if (kmBetween(lastPoint, [lat, lng]) > MAX_LEG_KM && mins < MIN_LEG_MINUTES) {
+          run = null;
+          lastPoint = null;
+        }
       }
       var age = Math.min(Math.max(Math.trunc((now - at) / bucketMs), 0), AGE_BUCKETS - 1);
       var hostile = HOSTILE[row.action_type] === true;

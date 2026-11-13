@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.2.3
+// @version        0.2.4
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.2.3';
+  var VERSION = '0.2.4';
   var LS_KEY = 'plugin-tactical-relay-settings';
   // A stuck POST would keep the queue in flight forever and then every later event is dropped.
   var SEND_TIMEOUT_MS = 20000;
@@ -83,6 +83,49 @@ function wrapper(plugin_info) {
   function entry(markup, type) {
     for (var i = 0; i < markup.length; i++) if (markup[i][0] === type) return markup[i][1];
     return null;
+  }
+
+  function entries(markup, type) {
+    var out = [];
+    for (var i = 0; i < markup.length; i++) if (markup[i] && markup[i][0] === type && markup[i][1]) out.push(markup[i][1]);
+    return out;
+  }
+
+  // An event can name more than one portal: "linked from A to B" carries both ends, "destroyed the Link
+  // A - B" carries both, a Control Field carries three. Only ONE of them is where the agent actually
+  // stood, and picking by markup order is a coin flip - a wrong pick makes the activity trail jump to the
+  // far end of a link as if the agent had teleported there. The agent has to be at one end, so the honest
+  // choice is the portal nearest their last known position.
+  // A markup PORTAL carries latE6/lngE6 (integers), not lat/lng; comparing the raw entries would yield
+  // NaN and silently keep the first one - i.e. the bug this is meant to fix.
+  function portalLatLng(p) {
+    if (!p) return null;
+    var lat = typeof p.lat === 'number' ? p.lat : typeof p.latE6 === 'number' ? p.latE6 / 1e6 : null;
+    var lng = typeof p.lng === 'number' ? p.lng : typeof p.lngE6 === 'number' ? p.lngE6 / 1e6 : null;
+    return lat === null || lng === null ? null : { lat: lat, lng: lng };
+  }
+
+  function metresBetween(a, b) {
+    var pa = portalLatLng(a);
+    var pb = portalLatLng(b);
+    if (!pa || !pb) return Infinity;
+    var dy = (pa.lat - pb.lat) * 111320;
+    var dx = (pa.lng - pb.lng) * 111320 * Math.cos((pa.lat * Math.PI) / 180);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function actionPortal(portals, lastPosition) {
+    if (!portals.length) return null;
+    // Without a known position there is nothing to reason from: the first entry is the origin, and any
+    // choice would be a guess. Keep it, and let the trail's own gap logic break the line.
+    if (portals.length === 1 || !lastPosition) return portals[0];
+    var geoPortals = portals.filter(function (p) {
+      return portalLatLng(p) !== null;
+    });
+    if (!geoPortals.length) return portals[0];
+    return geoPortals.reduce(function (best, p) {
+      return metresBetween(lastPosition, p) < metresBetween(lastPosition, best) ? p : best;
+    }, geoPortals[0]);
   }
 
   // Joined TEXT runs are matched with a space on both ends: the default phrases carry their own spaces
@@ -176,6 +219,7 @@ function wrapper(plugin_info) {
     var cfg = loadSettings();
     var stats = { parsed: 0, queued: 0, sent: 0, failed: 0, dropped: 0, lastBeat: 0, lastError: '', lastSend: 0 };
     var seen = {}; // comm guid -> ms, pruned on every hook payload
+    var lastPos = {}; // agent -> {lat,lng}: which end of a multi-portal event the agent was actually at
     var relayId = relayIdentity(); // stable per install: the id is what a status row is anchored to
     var heartbeatTimer = null;
     var keepAliveTimer = null;
@@ -321,14 +365,16 @@ function wrapper(plugin_info) {
       return true;
     }
 
-    thisPlugin.extractEvent = function (item) {
+    thisPlugin.extractEvent = function (item, previous) {
       var p = plextOf(item);
       if (!p || p.plextType !== 'SYSTEM_BROADCAST') return null;
       var markup = p.markup;
       if (!markup || !markup.length) return null;
       var player = entry(markup, 'PLAYER') || entry(markup, 'SENDER');
       if (!player || !player.plain) return null;
-      var portal = entry(markup, 'PORTAL');
+      // A link carries BOTH ends in the markup. Taking the first one plotted the far endpoint as if the
+      // agent had been there, which showed up in the activity trail as a teleport across the city.
+      var portal = actionPortal(entries(markup, 'PORTAL'), previous || null);
       var text = plainText(markup);
       var team = player.team || p.team || 'NEUTRAL';
       if (!factionOk(team)) return null;
@@ -351,16 +397,24 @@ function wrapper(plugin_info) {
       return table;
     }
 
+    function agentOf(item) {
+      var p = plextOf(item);
+      if (!p || !p.markup) return '';
+      var player = entry(p.markup, 'PLAYER') || entry(p.markup, 'SENDER');
+      return player && player.plain ? player.plain : '';
+    }
+
     function onComm(data) {
       if (!cfg.enabled || !data || !data.result) return;
       var now = Date.now();
       prune(now);
       for (var i = 0; i < data.result.length; i++) {
-        var ev = thisPlugin.extractEvent(data.result[i]);
+        var ev = thisPlugin.extractEvent(data.result[i], lastPos[agentOf(data.result[i])]);
         if (!ev) continue;
         if (now - Date.parse(ev.recorded_at) > cfg.maxAgeSeconds * 1000) continue; // replayed history
         if (seen[ev.event_guid]) continue;
         seen[ev.event_guid] = now;
+        if (typeof ev.lat === 'number' && typeof ev.lng === 'number') lastPos[ev.agent_name] = { lat: ev.lat, lng: ev.lng };
         stats.parsed++;
         stats.queued++;
         if (cfg.dumpComm) console.log('tactical-relay DUMP ' + JSON.stringify(ev));
