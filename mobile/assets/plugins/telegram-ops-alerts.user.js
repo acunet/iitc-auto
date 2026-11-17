@@ -2,7 +2,7 @@
 // @id             iitc-plugin-telegram-ops-alerts
 // @name           IITC plugin: Telegram Ops Alerts
 // @category       Anomalies
-// @version        0.7.0
+// @version        0.7.1
 // @namespace      https://github.com/acunet/iitc-telegram-alerts
 // @description    Relay ops COMM events and checkpoint alarms to a Telegram bot. Sends nothing until credentials are set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.telegramOpsAlerts = function () {});
 
-  var VERSION = '0.7.0';
+  var VERSION = '0.7.1';
   var LS_KEY = 'plugin-telegram-ops-alerts-settings';
 
   // Event kinds, in match order. Phrases are matched against the joined TEXT markup; a message like
@@ -85,6 +85,13 @@ function wrapper(plugin_info) {
     return null;
   }
 
+  function otherTeam(team) {
+    var t = String(team || '').toUpperCase();
+    if (t === 'ENLIGHTENED') return 'RESISTANCE';
+    if (t === 'RESISTANCE') return 'ENLIGHTENED';
+    return null;
+  }
+
   /**
    * Raw comm item ([guid, time, {plext}]) -> event, or null when no known phrase matched.
    * Reads plext.markup directly (same approach as the official uniques.js) so the plugin works on
@@ -122,13 +129,23 @@ function wrapper(plugin_info) {
     var portal = pick(item, 'PORTAL');
     var actor = pick(item, 'PLAYER') || pick(item, 'SENDER');
 
+    // A destroy/neutralize broadcast is written from the defender's side: plext.team and the portal entry
+    // both name the thing being destroyed, and the same guid reaches all three COMM channels (the first
+    // copy wins the dedupe), so neither can be trusted to name the attacker. The victim is never on the
+    // attacker's faction, so the other faction is the only self-consistent answer.
+    var hit = kind === 'destroy' || kind === 'neutralize';
+    var team =
+      (hit ? otherTeam(portal && portal.team) : null) ||
+      (actor && actor.team ? String(actor.team).toUpperCase() : '') ||
+      (hit ? '' : String(plext.team || '').toUpperCase());
+
     return {
       guid: item[0],
       time: item[1],
       kind: kind,
       text: text,
       player: actor ? String(actor.plain || '').replace(/: $/, '') : '',
-      team: actor && actor.team ? String(actor.team).toUpperCase() : String(plext.team || '').toUpperCase(),
+      team: team,
       portal:
         portal && portal.latE6 != null
           ? { name: String(portal.name || ''), latE6: portal.latE6, lngE6: portal.lngE6 }
