@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-relay
 // @name           IITC plugin: Tactical Relay
 // @category       Misc
-// @version        0.2.4
+// @version        0.2.5
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Relay COMM activity to an ops backend. Sends nothing until a token is set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalRelay = function () {});
 
-  var VERSION = '0.2.4';
+  var VERSION = '0.2.5';
   var LS_KEY = 'plugin-tactical-relay-settings';
   // A stuck POST would keep the queue in flight forever and then every later event is dropped.
   var SEND_TIMEOUT_MS = 20000;
@@ -365,6 +365,12 @@ function wrapper(plugin_info) {
       return true;
     }
 
+    function otherTeam(team) {
+      if (team === 'ENLIGHTENED') return 'RESISTANCE';
+      if (team === 'RESISTANCE') return 'ENLIGHTENED';
+      return null;
+    }
+
     thisPlugin.extractEvent = function (item, previous) {
       var p = plextOf(item);
       if (!p || p.plextType !== 'SYSTEM_BROADCAST') return null;
@@ -376,13 +382,19 @@ function wrapper(plugin_info) {
       // agent had been there, which showed up in the activity trail as a teleport across the city.
       var portal = actionPortal(entries(markup, 'PORTAL'), previous || null);
       var text = plainText(markup);
-      var team = player.team || p.team || 'NEUTRAL';
+      var action = classify(text, cfg.phrases && Object.keys(cfg.phrases).length ? mergePhrases(cfg.phrases) : DEFAULT_PHRASES);
+      // A destroy/neutralize broadcast is written from the defender's side: plext.team and the portal team
+      // both name the thing being destroyed, and the same guid reaches all three COMM channels (the first
+      // copy wins the dedupe), so neither can be trusted to name the attacker. The victim is never on the
+      // attacker's faction, so the other faction is the only self-consistent answer.
+      var hit = action === 'destroy' || action === 'neutralize';
+      var team = (hit ? otherTeam(portal && portal.team) : null) || player.team || (hit ? 'NEUTRAL' : p.team);
       if (!factionOk(team)) return null;
       return {
         event_guid: String(item[0] || ''),
         agent_name: player.plain,
         team: team,
-        action_type: classify(text, cfg.phrases && Object.keys(cfg.phrases).length ? mergePhrases(cfg.phrases) : DEFAULT_PHRASES),
+        action_type: action,
         portal_name: portal ? portal.name || null : null,
         lat: portal && typeof portal.latE6 === 'number' ? portal.latE6 / 1e6 : null,
         lng: portal && typeof portal.lngE6 === 'number' ? portal.lngE6 / 1e6 : null,
