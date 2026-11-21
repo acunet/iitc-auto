@@ -133,7 +133,7 @@ function wrapper(plugin_info) {
     started = true;
 
     var cfg = loadSettings();
-    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, notModified: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, coverage: 0, beacons: 0, relaysAlive: 0, relaysSeen: 0 };
+    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, notModified: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, coverage: 0, coverageTotal: 0, beacons: 0, relaysAlive: 0, relaysSeen: 0 };
     var markers = []; // {marker, target, name} for countdown updates
     var lastBody = null; // last good payload, so a map refresh can re-anchor without another poll
     var lastDigest = null; // payload identity, so an unchanged poll does not rebuild every marker
@@ -197,6 +197,7 @@ function wrapper(plugin_info) {
       stats.activity = 0;
       stats.pressure = 0;
       stats.coverage = 0;
+      stats.coverageTotal = 0;
       stats.beacons = 0;
       var nowMs = Date.now();
 
@@ -236,6 +237,9 @@ function wrapper(plugin_info) {
 
       var coverage = (body && body.coverage) || [];
       var reach = Math.max(10, Number(cfg.reachMeters) || 168);
+      // the backend returns the busiest patches up to a cap: without this the ones it dropped would
+      // read as clear ground, which is the one mistake this layer must not make
+      stats.coverageTotal = coverage.length ? Number(coverage[0].total) || coverage.length : 0;
       if (cfg.showCoverage) {
         var patchMax = 1;
         for (var q = 0; q < coverage.length; q++) patchMax = Math.max(patchMax, Number(coverage[q].hits) || 0);
@@ -432,7 +436,11 @@ function wrapper(plugin_info) {
         [
           'Coverage',
           'threat ' + String(cfg.threatFaction || 'res').toUpperCase() + ' · ' + cfg.coverageSinceMinutes +
-            ' min · XMP reach ' + cfg.reachMeters + ' m' + (cfg.showCoverage ? '' : ' (hidden)'),
+            ' min · XMP reach ' + cfg.reachMeters + ' m' + (cfg.showCoverage ? '' : ' (hidden)') +
+            (stats.coverageTotal > stats.coverage
+              ? ' · showing the busiest ' + stats.coverage + ' of ' + stats.coverageTotal +
+                ' patches: the rest are off the map, so zoom in before trusting a gap'
+              : ''),
         ],
         ['Agents', cfg.agents ? cfg.agents : 'all (no filter)'],
         [
