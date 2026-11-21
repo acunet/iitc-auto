@@ -2,9 +2,9 @@
 // @id             iitc-plugin-ops-overlay
 // @name           IITC plugin: Ops Overlay
 // @category       Misc
-// @version        0.3.3
+// @version        0.4.0
 // @namespace      https://github.com/acunet/iitc-plugins-enl
-// @description    Draw what the ops backend knows onto the map: battle-beacon countdowns and portals with recent tandem (bag-account) patterns.
+// @description    Draw what the ops backend knows onto the map: where the threat faction's XMP attacks reach, battle-beacon countdowns, and portals with recent tandem (bag-account) patterns.
 // @match          https://intel.ingress.com/*
 // @match          https://intel-x.ingress.com/*
 // @grant          none
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.opsOverlay = function () {});
 
-  var VERSION = '0.3.3';
+  var VERSION = '0.4.0';
   var LS_KEY = 'plugin-ops-overlay-settings';
   var LAYER_NAME = 'Ops Overlay';
   var started = false;
@@ -35,6 +35,11 @@ function wrapper(plugin_info) {
     showTargets: true,
     showActivity: true, // dot per portal with recent activity
     showPressure: true, // one circle per ~1.1 km cell, coloured by the dominant faction
+    showCoverage: true, // XMP reach of the threat faction's attacks: where a portal does not survive
+    coverageSinceMinutes: 1440, // a day: an hour of one city at 168 m resolution is a handful of blobs
+    threatFaction: 'res', // res | enl | both — whose attacks are the threat
+    reachMeters: 168, // L8 XMP reach; every circle in that layer is this number plus the patch spread
+    showReach: true, // the dotted ring one more reach out: a portal outside it was out of range
     agents: '', // comma-separated allow-list; empty = every agent the relays ever saw
     targetColor: '#4fc3f7',
     beaconColor: '#ff5c5c',
@@ -83,6 +88,23 @@ function wrapper(plugin_info) {
     return TEAM_COLORS[team] || '#9e9e9e';
   }
 
+  var THREAT_FACTIONS = [
+    ['res', 'Resistance'],
+    ['enl', 'Enlightened'],
+    ['both', 'both sides'],
+  ];
+
+  function factionOptions(current) {
+    var out = '';
+    for (var i = 0; i < THREAT_FACTIONS.length; i++) {
+      out +=
+        '<option value="' + THREAT_FACTIONS[i][0] + '"' +
+        (String(current) === THREAT_FACTIONS[i][0] ? ' selected' : '') +
+        '>' + THREAT_FACTIONS[i][1] + '</option>';
+    }
+    return out;
+  }
+
   function dotHtml(color) {
     return (
       '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + color +
@@ -111,7 +133,7 @@ function wrapper(plugin_info) {
     started = true;
 
     var cfg = loadSettings();
-    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, notModified: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, beacons: 0, relaysAlive: 0, relaysSeen: 0 };
+    var stats = { fetches: 0, fail: 0, renders: 0, skipped: 0, notModified: 0, lastError: '', lastOk: 0, targets: 0, tandem: 0, activity: 0, pressure: 0, coverage: 0, beacons: 0, relaysAlive: 0, relaysSeen: 0 };
     var markers = []; // {marker, target, name} for countdown updates
     var lastBody = null; // last good payload, so a map refresh can re-anchor without another poll
     var lastDigest = null; // payload identity, so an unchanged poll does not rebuild every marker
@@ -174,6 +196,7 @@ function wrapper(plugin_info) {
       stats.tandem = 0;
       stats.activity = 0;
       stats.pressure = 0;
+      stats.coverage = 0;
       stats.beacons = 0;
       var nowMs = Date.now();
 
@@ -208,6 +231,54 @@ function wrapper(plugin_info) {
             .addTo(layer)
             .bindPopup(popup(['pressure: ' + (cell.dominant || 'NEUTRAL'), 'ENL ' + (cell.enl || 0) + ' · RES ' + (cell.res || 0), 'total actions ' + (cell.total || 0)]));
           stats.pressure++;
+        }
+      }
+
+      var coverage = (body && body.coverage) || [];
+      var reach = Math.max(10, Number(cfg.reachMeters) || 168);
+      if (cfg.showCoverage) {
+        var patchMax = 1;
+        for (var q = 0; q < coverage.length; q++) patchMax = Math.max(patchMax, Number(coverage[q].hits) || 0);
+        for (var k = 0; k < coverage.length; k++) {
+          var patch = coverage[k];
+          if (patch.lat == null || patch.lng == null) continue;
+          // The patch centre is the mean of the attacks in its ~165 m cell and spread_m is how far the
+          // furthest one sits from it, so reach + spread contains every hit the backend saw. A coarser
+          // grid would widen this circle instead of quietly under-reporting where they were.
+          var hitRadius = reach + (Number(patch.spread_m) || 0);
+          var patchHeat = Math.min(1, Math.sqrt((Number(patch.hits) || 0) / patchMax));
+          var patchColour = teamColor(patch.team);
+          if (cfg.showReach) {
+            // inside this ring a portal can still be shot from a spot the data saw them fire from
+            L.circle([patch.lat, patch.lng], {
+              radius: hitRadius + reach,
+              color: patchColour,
+              weight: 1,
+              dashArray: '4,6',
+              fill: false,
+              opacity: 0.6,
+              interactive: false,
+            }).addTo(layer);
+          }
+          L.circle([patch.lat, patch.lng], {
+            radius: hitRadius,
+            stroke: false,
+            fillColor: patchColour,
+            fillOpacity: 0.12 + 0.35 * patchHeat,
+            interactive: true,
+          })
+            .addTo(layer)
+            .bindPopup(
+              popup([
+                (patch.team === 'RESISTANCE' ? 'RES' : patch.team === 'ENLIGHTENED' ? 'ENL' : '?') +
+                  ' attacks · ' + (Number(patch.hits) || 0) + ' in ' + cfg.coverageSinceMinutes + ' min',
+                (Number(patch.agents) || 0) + (Number(patch.agents) === 1 ? ' agent' : ' agents') +
+                  ' · last ' + ago(Date.parse(patch.last_at), nowMs),
+                'fired from within ' + Math.round(hitRadius) + ' m · out of range beyond ' +
+                  Math.round(hitRadius + reach) + ' m',
+              ])
+            );
+          stats.coverage++;
         }
       }
 
@@ -298,7 +369,10 @@ function wrapper(plugin_info) {
         var bounds = window.map.getBounds();
         var query =
           '/v1/overlay?bbox=' + bboxOf(bounds) + '&since=' + cfg.sinceMinutes + '&min_hits=' + cfg.minHits +
-          '&agents=' + encodeURIComponent(cfg.agents || '');
+            '&agents=' + encodeURIComponent(cfg.agents || '') +
+            // the coverage layer reads its own window and threat faction, always explicit
+            '&coverage_since=' + Math.max(15, Number(cfg.coverageSinceMinutes) || 1440) +
+            '&faction=' + encodeURIComponent(cfg.threatFaction || 'res');
         stats.fetches++;
         send(query)
           .then(function (result) {
@@ -311,7 +385,7 @@ function wrapper(plugin_info) {
             var body = result.body;
             // Rebuilding markers is the expensive part on a phone. The backend caches its payload, so
             // an unchanged poll comes back byte-identical: skip the redraw instead of flickering.
-            var digest = JSON.stringify([body.targets, body.activity, body.pressure, body.beacons, body.tandem_portals]);
+            var digest = JSON.stringify([body.targets, body.activity, body.pressure, body.coverage, body.beacons, body.tandem_portals]);
             if (digest !== lastDigest) {
               render(body);
               lastDigest = digest;
@@ -353,7 +427,13 @@ function wrapper(plugin_info) {
         ['Endpoint', cfg.apiBase || '(empty)'],
         ['Token', cfg.token ? 'set' : 'EMPTY — nothing is fetched'],
         ['Layer', LAYER_NAME],
-        ['Markers', stats.targets + ' target / ' + stats.tandem + ' tandem / ' + stats.activity + ' dot / ' + stats.pressure + ' cell / ' + stats.beacons + ' beacon'],
+        ['Markers', stats.targets + ' target / ' + stats.tandem + ' tandem / ' + stats.activity + ' dot / ' +
+          stats.pressure + ' cell / ' + stats.coverage + ' attack patch / ' + stats.beacons + ' beacon'],
+        [
+          'Coverage',
+          'threat ' + String(cfg.threatFaction || 'res').toUpperCase() + ' · ' + cfg.coverageSinceMinutes +
+            ' min · XMP reach ' + cfg.reachMeters + ' m' + (cfg.showCoverage ? '' : ' (hidden)'),
+        ],
         ['Agents', cfg.agents ? cfg.agents : 'all (no filter)'],
         [
           'Relays',
@@ -399,10 +479,18 @@ function wrapper(plugin_info) {
         '<label><input id="opl-pressure" type="checkbox" ' + (cfg.showPressure ? 'checked' : '') + '> pressure cells</label> ' +
         '<label><input id="opl-beacons" type="checkbox" ' + (cfg.showBeacons ? 'checked' : '') + '> beacon countdown</label> ' +
         '<label><input id="opl-tandem" type="checkbox" ' + (cfg.showTandem ? 'checked' : '') + '> tandem badges</label></p>' +
+        '<p><label><input id="opl-coverage" type="checkbox" ' + (cfg.showCoverage ? 'checked' : '') + '> attack coverage</label> ' +
+        '<label><input id="opl-reachring" type="checkbox" ' + (cfg.showReach ? 'checked' : '') + '> reach ring</label> ' +
+        '<b>Threat</b> <select id="opl-faction">' + factionOptions(cfg.threatFaction) + '</select></p>' +
+        '<p><b>Coverage window min</b> <input id="opl-cosince" size="5" value="' + esc(cfg.coverageSinceMinutes) + '"> ' +
+        '<b>XMP reach m</b> <input id="opl-reachm" size="4" value="' + esc(cfg.reachMeters) + '"><br>' +
+        '<span style="opacity:.7">Every patch is a place the threat faction fired from: an XMP hits what is ' +
+        'within reach of the agent, so a portal outside the dotted ring is out of range of every position the ' +
+        'data saw them attack from. The window is what makes it readable: one hour is a few blobs, a week is a picture.</span></p>' +
         '<p><b>Only these agents</b><br><input id="opl-agents" style="width:100%" value="' + esc(cfg.agents || '') +
         '" placeholder="Acunet, Foo — empty = every agent"><br>' +
-        '<span style="opacity:.7">Filters activity dots and pressure cells on the backend. ' +
-        'Clear it to see the whole city again.</span></p>' +
+        '<span style="opacity:.7">Filters activity dots, pressure cells and attack patches on the backend. ' +
+        'Clear it to see the whole city again; naming one attacker turns the patches into that agent\'s footprint.</span></p>' +
         '<p style="opacity:.7">Read-only: this plugin draws backend intel, it never reports anything.</p>' +
         '</div>';
 
@@ -432,6 +520,11 @@ function wrapper(plugin_info) {
               cfg.showTargets = $('#opl-targets', $d).prop('checked');
               cfg.showActivity = $('#opl-activity', $d).prop('checked');
               cfg.showPressure = $('#opl-pressure', $d).prop('checked');
+              cfg.showCoverage = $('#opl-coverage', $d).prop('checked');
+              cfg.showReach = $('#opl-reachring', $d).prop('checked');
+              cfg.threatFaction = String(get('opl-faction') || 'res');
+              cfg.coverageSinceMinutes = Math.max(15, parseInt(get('opl-cosince'), 10) || 1440);
+              cfg.reachMeters = Math.max(10, parseInt(get('opl-reachm'), 10) || 168);
               cfg.showBeacons = $('#opl-beacons', $d).prop('checked');
               cfg.showTandem = $('#opl-tandem', $d).prop('checked');
               window.localStorage.setItem(LS_KEY, JSON.stringify(cfg));
