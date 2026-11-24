@@ -2,7 +2,7 @@
 // @id             iitc-plugin-telegram-ops-alerts
 // @name           IITC plugin: Telegram Ops Alerts
 // @category       Anomalies
-// @version        0.7.1
+// @version        0.8.0
 // @namespace      https://github.com/acunet/iitc-telegram-alerts
 // @description    Relay ops COMM events and checkpoint alarms to a Telegram bot. Sends nothing until credentials are set (dry-run by default).
 // @match          https://intel.ingress.com/*
@@ -18,7 +18,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.telegramOpsAlerts = function () {});
 
-  var VERSION = '0.7.1';
+  var VERSION = '0.8.0';
   var LS_KEY = 'plugin-telegram-ops-alerts-settings';
 
   // Event kinds, in match order. Phrases are matched against the joined TEXT markup; a message like
@@ -537,6 +537,50 @@ function wrapper(plugin_info) {
     return dest ? String(dest.chatId || '') + '#' + String(dest.topicId || '') : 'default';
   }
 
+  /**
+   * Full destination for a kind: the route if one is configured, otherwise the default chat/topic.
+   * An empty field always means "the general channel", and a topic id is never inherited across chats —
+   * `{"flip": {"chatId": "-100…B"}}` must go to B's general topic, not to the default chat's topic.
+   */
+  function resolveDest(kind, cfg) {
+    var r = routeFor(kind, cfg);
+    var chat = String((r && r.chatId) || (cfg && cfg.chatId) || '');
+    var isDefaultChat = chat === String((cfg && cfg.chatId) || '');
+    var topic = String((r && r.topicId) || (isDefaultChat ? (cfg && cfg.topicId) || '' : '') || '');
+    return { chatId: chat, topicId: topic };
+  }
+
+  function destLabel(dest) {
+    if (!dest || !dest.chatId) return '(no chat id set)';
+    return dest.chatId + (dest.topicId ? ' topic ' + dest.topicId : ' · general');
+  }
+
+  /** Distinct destinations with the kinds that land in them — what the dialog shows above the JSON. */
+  function destinationGroups(cfg) {
+    var groups = {};
+    var list = [];
+    KIND_ORDER.concat(['watch', 'alarm']).forEach(function (kind) {
+      var dest = resolveDest(kind, cfg);
+      var key = routeKey(dest);
+      if (!groups[key]) {
+        groups[key] = { dest: dest, kinds: [] };
+        list.push(groups[key]);
+      }
+      groups[key].kinds.push(kind);
+    });
+    return list;
+  }
+
+  function routingText(cfg) {
+    var groups = destinationGroups(cfg);
+    if (groups.length === 1 && !groups[0].dest.chatId) return '(no chat id set — nothing can be sent)';
+    return groups
+      .map(function (g) {
+        return g.kinds.join(', ') + ' → ' + destLabel(g.dest);
+      })
+      .join('\n');
+  }
+
   var STATS_KEY = 'plugin-telegram-ops-alerts-stats';
   var STATS_MAX_PLAYERS = 200;
   var stats = { players: {}, savedAt: 0 };
@@ -703,7 +747,9 @@ function wrapper(plugin_info) {
 
   function sendTelegram(cfg, text, dest) {
     var chat = (dest && dest.chatId) || cfg.chatId;
-    var topic = (dest && dest.topicId) || cfg.topicId;
+    // A topic id only exists inside its own chat: inheriting the default topic for a different chat
+    // posts into a thread that either does not exist there or belongs to someone else.
+    var topic = chat === (cfg.chatId || '') ? (dest && dest.topicId) || cfg.topicId : (dest && dest.topicId) || '';
     var url = 'https://api.telegram.org/bot' + cfg.botToken + '/sendMessage';
     var body = { chat_id: chat, text: text, parse_mode: 'HTML', disable_web_page_preview: true };
     if (topic) body.message_thread_id = Number(topic);
@@ -788,8 +834,13 @@ function wrapper(plugin_info) {
 
   var queues = {};
 
-  /** One queue per destination: routing can send a kind to its own chat/topic. Created on demand. */
-  function queueFor(dest) {
+  /**
+   * One queue per destination: routing can send a kind to its own chat/topic. The kind is resolved to a
+   * full destination here, so an empty field in the routing table means the general channel and never a
+   * topic borrowed from another chat.
+   */
+  function queueFor(kind) {
+    var dest = resolveDest(kind, settings);
     var key = routeKey(dest);
     if (!queues[key]) {
       queues[key] = createQueue({
@@ -801,7 +852,9 @@ function wrapper(plugin_info) {
         send: function (text) {
           return deliver(text, dest);
         },
-        log: log,
+        log: function (msg) {
+          log(msg + ' → ' + destLabel(dest));
+        },
       });
     }
     return queues[key];
@@ -829,7 +882,7 @@ function wrapper(plugin_info) {
       ev.priority = matchesRegex(settings.priorityPlayers, ev.player);
       noteWatchMove(ev, settings); // watched agent: attach "moved X km NE since the last action"
       noteEvent(ev, settings);
-      queueFor(routeFor(ev.kind, settings)).push(ev, ev.priority);
+      queueFor(ev.watch ? 'watch' : ev.kind).push(ev, ev.priority);
       if (ev.priority) log('PRIORITY ' + ev.kind + ' · ' + ev.player + (ev.portal ? ' @' + ev.portal.name : ''));
       if (ev.watch) {
         log(
@@ -861,7 +914,7 @@ function wrapper(plugin_info) {
         due[i].leadMinutes > 0
           ? '⏰ <b>Checkpoint in ' + due[i].leadMinutes + ' min</b> — ' + esc(when)
           : '⏰ <b>Checkpoint now</b> — ' + esc(when);
-      deliver(txt).catch(function (e) {
+      deliver(txt, resolveDest('alarm', settings)).catch(function (e) {
         log('alarm send failed: ' + e.message);
       });
     }
@@ -993,10 +1046,17 @@ function wrapper(plugin_info) {
       '</textarea><br>' +
       '<button onclick="window.plugin.telegramOpsAlerts.applyPresetFromForm();return false">Apply preset</button> ' +
       '<button onclick="window.plugin.telegramOpsAlerts.exportPresetToForm();return false">Fill from current</button></p>' +
-      '<p><b>Routing</b> (JSON: kind → destination; <code>"*"</code> = catch-all; use <code>topicId</code> for a forum topic):<br>' +
+      '<p><b>Routing</b> (JSON: kind → destination; <code>"*"</code> = catch-all; <code>"alarm"</code> = checkpoint alarms.<br>' +
+      'Leave a field out and that kind goes to the <b>general channel</b> above; a <code>topicId</code> belongs to its own chat, so another <code>chatId</code> never borrows the general topic):<br>' +
       '<textarea id="ta-routing" style="width:100%;height:45px">' +
       esc(JSON.stringify(settings.routing || {})) +
-      '</textarea></p>' +
+      '</textarea><br>' +
+      '<span style="opacity:.75">empty = general — where each stream currently goes:</span><br>' +
+      '<textarea id="ta-routing-view" readonly style="width:100%;height:95px;font-family:monospace">' +
+      esc(routingText(settings)) +
+      '</textarea>' +
+      '<button onclick="window.plugin.telegramOpsAlerts.testRouting();return false">Test routing</button> ' +
+      '<span style="opacity:.7">sends one message per destination, wrong topic id shows up as FAILED</span></p>' +
       '<p><b>Agent stats</b> (top actors, virus use, most-touched portals = home/farm hint):<br>' +
       '<textarea id="ta-stats" readonly style="width:100%;height:95px;font-family:monospace">' +
       esc(statsText(8)) +
@@ -1114,6 +1174,38 @@ function wrapper(plugin_info) {
     );
   }
 
+  /**
+   * One message per distinct destination, so a wrong chat id or a topic id belonging to another group
+   * shows up now (Telegram answers "message thread not found") instead of silently during an op.
+   */
+  function testRouting() {
+    readForm();
+    saveSettings();
+    var groups = destinationGroups(settings);
+    writeRoutingView();
+    if (!canSend()) {
+      log('routing test: no bot token / chat id, nothing sent');
+      return;
+    }
+    log('routing test: ' + groups.length + ' destination(s)');
+    groups.forEach(function (g) {
+      var label = destLabel(g.dest);
+      deliver('🔀 <b>routing test</b> → ' + esc(label) + '\n' + esc(g.kinds.join(', ')), g.dest).then(
+        function () {
+          log('  ok ' + label);
+        },
+        function (e) {
+          log('  FAILED ' + label + ' — ' + e.message);
+        }
+      );
+    });
+  }
+
+  function writeRoutingView() {
+    var el = document.getElementById('ta-routing-view');
+    if (el) el.value = routingText(settings);
+  }
+
   function resetStats() {
     stats = { players: {}, savedAt: 0 };
     saveStats();
@@ -1167,6 +1259,7 @@ function wrapper(plugin_info) {
     if (phrases) phrases.value = JSON.stringify(settings.phrases);
     var routingEl = document.getElementById('ta-routing');
     if (routingEl) routingEl.value = JSON.stringify(settings.routing || {});
+    writeRoutingView();
     var statsEl = document.getElementById('ta-stats');
     if (statsEl) statsEl.value = statsText(8);
   }
@@ -1314,6 +1407,10 @@ function wrapper(plugin_info) {
     exportPreset: exportPreset,
     applyPreset: applyPreset,
     routeFor: routeFor,
+    resolveDest: resolveDest,
+    destLabel: destLabel,
+    destinationGroups: destinationGroups,
+    routingText: routingText,
     noteEvent: noteEvent,
     loadStats: loadStats,
     statsSummary: statsSummary,
@@ -1335,6 +1432,7 @@ function wrapper(plugin_info) {
   thisPlugin.exportPresetToForm = exportPresetToForm;
   thisPlugin.sendStats = sendStats;
   thisPlugin.resetStats = resetStats;
+  thisPlugin.testRouting = testRouting;
   thisPlugin.resetWatch = resetWatch;
   thisPlugin.version = VERSION;
 
