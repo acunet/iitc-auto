@@ -341,12 +341,9 @@ function wrapper(plugin_info) {
     saveSettings({ day: cfg.day });
     // A thinned window cannot answer "show me just that day": fetch that day on its own instead of
     // drawing the few sample points that happen to fall in it.
-    if (cfg.day && stats.sampled) {
-      var untilDays = daysAgo(cfg.day);
-      if (untilDays > 0) {
-        load(false, { days: 1, untilDays: untilDays }).then(refreshStatus);
-        return stats.points;
-      }
+    if (cfg.day && stats.sampled && daysAgo(cfg.day) > 0) {
+      load(false, { days: 1, dayKey: cfg.day }).then(refreshStatus);
+      return stats.points;
     }
     if (previous && previous !== cfg.day && stats.windowUntil) {
       // coming back from a per-day window: restore the full trail from the server
@@ -383,9 +380,15 @@ function wrapper(plugin_info) {
     if (!cfg.apiBase || !cfg.token) return Promise.resolve(false);
     var days = slice && slice.days ? slice.days : cfg.days;
     var params = { days: days };
-    // only send the offset when there is one: a plain trail must stay a plain `?days=N` request,
-    // which is also what an older server understands
-    if (slice && slice.untilDays) params.until_days = slice.untilDays;
+    // A picked calendar day is sent as its two local midnights: `days=1` is a rolling 24 hours and would
+    // answer a different day than the one the operator picked (and drift as the poll runs).
+    if (slice && slice.dayKey) {
+      var fromMs = dayStartMs(slice.dayKey);
+      if (isFinite(fromMs)) {
+        params.from_iso = new Date(fromMs).toISOString();
+        params.to_iso = new Date(fromMs + 86400000).toISOString();
+      }
+    }
     var url = apiUrl('/v1/intel/agent/' + encodeURIComponent(cfg.agent) + '/trail', params);
     return fetch(url, { headers: { 'X-Ops-Token': cfg.token } })
       .then(function (response) {
@@ -399,7 +402,7 @@ function wrapper(plugin_info) {
         // line reads as "that is everything they did", and a long gap reads as two months of silence.
         stats.count = typeof body.count === 'number' ? body.count : stats.rows.length;
         stats.sampled = body.sampled === true;
-        stats.windowUntil = body.until_days || 0;
+        stats.windowUntil = body.until_days || (slice && slice.dayKey ? 1 : 0);
         stats.points = render(stats.rows, stats.days, cfg.day);
         stats.loadedAt = Date.now();
         stats.lastError = '';
