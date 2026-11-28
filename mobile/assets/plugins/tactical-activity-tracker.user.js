@@ -2,7 +2,7 @@
 // @id             iitc-plugin-tactical-activity-tracker
 // @name           IITC plugin: Tactical Activity Tracker
 // @category       Misc
-// @version        0.4.7
+// @version        0.5.0
 // @namespace      https://github.com/acunet/iitc-plugins-enl
 // @description    Draw one agent's activity trail from the ops backend: every action the whole team's relays captured, not just what this phone happened to see.
 // @match          https://intel.ingress.com/*
@@ -22,7 +22,7 @@ function wrapper(plugin_info) {
   if (typeof window.plugin !== 'function') window.plugin = function () {};
   var thisPlugin = (window.plugin.tacticalActivityTracker = function () {});
 
-  var VERSION = '0.4.7';
+  var VERSION = '0.5.0';
   var LS_KEY = 'plugin-tactical-activity-tracker-settings';
   var LAYER_NAME = 'Activity Trail';
   var started = false;
@@ -47,6 +47,23 @@ function wrapper(plugin_info) {
   // Two consecutive actions further apart than this imply a speed no agent reaches between portals
   // (a car in Jakarta averages well under 100 km/h). Such a point is a multi-portal event recorded at the
   // wrong end - a link's far endpoint - not movement, and must not stretch the line across the city.
+  // How many whole days back a local calendar day is (0 = today). The server window is relative to now,
+  // so "the day 40 days ago" is days=1&until_days=40.
+  function daysAgo(key) {
+    var start = dayStartMs(key);
+    var today = dayStartMs(dayKeyOf(Date.now()));
+    if (isNaN(start) || isNaN(today)) return 0;
+    return Math.max(0, Math.round((today - start) / 86400000));
+  }
+
+  function refreshStatus() {
+    var status = document.getElementById('tat-status');
+    if (status) status.innerHTML = 'Trail: ' + statusLine();
+  }
+
+  // The live server keeps 90 days (RETENTION_DAYS). Asking for more is clamped server-side and the
+  // response echoes the real window, so this is a hint in the UI, not a client-side limit.
+  var RETENTION_HINT = '90 days';
   var MAX_LEG_KM = 25;
   var MIN_LEG_MINUTES = 6; // 25 km in under 6 min is >250 km/h
 
@@ -66,7 +83,7 @@ function wrapper(plugin_info) {
   var cfg = {};
   var layer = null;
   var drawnBounds = null;
-  var stats = { points: 0, loadedAt: null, failed: 0, lastError: '', days: 0, rows: [] };
+  var stats = { points: 0, loadedAt: null, failed: 0, lastError: '', days: 0, rows: [], count: 0, sampled: false };
 
   function loadSettings() {
     var stored = {};
@@ -319,8 +336,23 @@ function wrapper(plugin_info) {
   // Switching days must not hit the network: a week of one agent is already in `stats.rows`, and the
   // whole point is to flip between days while looking at the map.
   function drawDay(day) {
+    var previous = cfg.day;
     cfg.day = day || '';
     saveSettings({ day: cfg.day });
+    // A thinned window cannot answer "show me just that day": fetch that day on its own instead of
+    // drawing the few sample points that happen to fall in it.
+    if (cfg.day && stats.sampled) {
+      var untilDays = daysAgo(cfg.day);
+      if (untilDays > 0) {
+        load(false, { days: 1, untilDays: untilDays }).then(refreshStatus);
+        return stats.points;
+      }
+    }
+    if (previous && previous !== cfg.day && stats.windowUntil) {
+      // coming back from a per-day window: restore the full trail from the server
+      load(false).then(refreshStatus);
+      return stats.points;
+    }
     stats.points = render(stats.rows, stats.days || cfg.days, cfg.day);
     if (window.layerChooser && window.layerChooser.showLayer) window.layerChooser.showLayer(layer, true);
     var status = document.getElementById('tat-status');
@@ -331,10 +363,17 @@ function wrapper(plugin_info) {
   function statusLine() {
     if (!stats.loadedAt) return 'not loaded';
     var ago = Math.round((Date.now() - stats.loadedAt) / 1000);
-    return stats.points + ' point(s), ' + ago + 's ago' + (stats.failed ? ', ' + stats.failed + ' failed' : '');
+    var text = stats.points + ' point(s)';
+    // `count` is every action in the window; the map may only be drawing a sample of it
+    if (stats.sampled) text += ' of ' + stats.count + ' action(s), thinned';
+    text += ', ' + ago + 's ago';
+    return text + (stats.failed ? ', ' + stats.failed + ' failed' : '');
   }
 
-  function load(fit) {
+  // `slice` lets the day filter ask for exactly that day instead of cutting it out of a thinned sample:
+  // with a 90 day window the sample has a handful of points per day, so one day of it draws almost
+  // nothing even though the agent was busy. (Not named `window`: that would shadow the global inside.)
+  function load(fit, slice) {
     // The trail endpoint is per agent, so an empty Agent field is the one failure the operator hits
     // most: say it, instead of returning false and draining the dialog of any feedback.
     if (!cfg.agent) {
@@ -342,7 +381,12 @@ function wrapper(plugin_info) {
       return Promise.resolve(false);
     }
     if (!cfg.apiBase || !cfg.token) return Promise.resolve(false);
-    var url = apiUrl('/v1/intel/agent/' + encodeURIComponent(cfg.agent) + '/trail', { days: cfg.days });
+    var days = slice && slice.days ? slice.days : cfg.days;
+    var params = { days: days };
+    // only send the offset when there is one: a plain trail must stay a plain `?days=N` request,
+    // which is also what an older server understands
+    if (slice && slice.untilDays) params.until_days = slice.untilDays;
+    var url = apiUrl('/v1/intel/agent/' + encodeURIComponent(cfg.agent) + '/trail', params);
     return fetch(url, { headers: { 'X-Ops-Token': cfg.token } })
       .then(function (response) {
         if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -351,6 +395,11 @@ function wrapper(plugin_info) {
       .then(function (body) {
         stats.days = body.days || cfg.days;
         stats.rows = body.trail || [];
+        // A 90 day window of a busy agent is thousands of rows and the server thins it. Without this the
+        // line reads as "that is everything they did", and a long gap reads as two months of silence.
+        stats.count = typeof body.count === 'number' ? body.count : stats.rows.length;
+        stats.sampled = body.sampled === true;
+        stats.windowUntil = body.until_days || 0;
         stats.points = render(stats.rows, stats.days, cfg.day);
         stats.loadedAt = Date.now();
         stats.lastError = '';
@@ -372,19 +421,40 @@ function wrapper(plugin_info) {
   // A drawn trail is a live view. Without this the line stays exactly as it was drawn until the
   // operator presses Load again, so new actions never appear - which reads as "the plugin is stale".
   var trailTimer = null;
+  // A 90 day window is many times the payload of a week, so the poll has to slow down with it: refreshing
+  // two months of history every minute would spend battery and bandwidth to change almost nothing.
+  function refreshDelay() {
+    var d = Number(cfg.days) || 7;
+    if (d <= 7) return 60000;
+    if (d <= 30) return 180000;
+    return 300000;
+  }
   function startTrailRefresh() {
-    if (trailTimer || !cfg.enabled || !cfg.agent || !cfg.token) return;
-    if (typeof setInterval !== 'function') return;
-    trailTimer = setInterval(function () {
+    stopTrailRefresh(); // a changed window must change the cadence, so always restart
+    if (!cfg.enabled || !cfg.agent || !cfg.token) return;
+    if (typeof setTimeout !== 'function') return;
+    var tick = function () {
       if (trailTimer === null) return;
-      // shortcut: poll only while the line is on the map; a hidden layer costs nothing until it is
-      // switched on (then Load picks up the gap). Upgrade if a stale first paint after re-enabling matters.
-      if (window.map && typeof window.map.hasLayer === 'function' && !window.map.hasLayer(layer)) return;
-      load(false); // never fitBounds on a background refresh: it would yank the operator's map
-    }, 60000);
+      // poll only while the line is on the map; a hidden layer costs nothing until it is switched on
+      // (then Load picks up the gap). Upgrade if a stale first paint after re-enabling matters.
+      if (window.map && typeof window.map.hasLayer === 'function' && !window.map.hasLayer(layer)) {
+        trailTimer = setTimeout(tick, refreshDelay());
+        return;
+      }
+      // a per-day view is a deliberate slice; refreshing the whole window over it would throw the
+      // operator's selection away, so leave the poll to the full-trail view
+      if (stats.windowUntil) {
+        trailTimer = setTimeout(tick, refreshDelay());
+        return;
+      }
+      load(false).then(function () {
+        trailTimer = trailTimer === null ? null : setTimeout(tick, refreshDelay());
+      });
+    };
+    trailTimer = setTimeout(tick, refreshDelay()); // never fitBounds here: it would yank the operator's map
   }
   function stopTrailRefresh() {
-    if (trailTimer && typeof clearInterval === 'function') clearInterval(trailTimer);
+    if (trailTimer && typeof clearTimeout === 'function') clearTimeout(trailTimer);
     trailTimer = null;
   }
 
@@ -399,9 +469,13 @@ function wrapper(plugin_info) {
     var keys = Object.keys(counts).sort().reverse();
     var html = '<option value=""' + (cfg.day ? '' : ' selected') + '>All ' + (stats.days || cfg.days) + ' days</option>';
     keys.forEach(function (key) {
+      // When the trail is a sample, a per-day count would be a sample count shown as if it were the real
+      // one - "Yesterday · 4" for a day with 40 actions. Mark it, or omit the number entirely.
+      var n = counts[key];
+      var label = stats.sampled ? (n > 0 ? ' · ~' + n : '') : ' · ' + n;
       html +=
         '<option value="' + key + '"' + (cfg.day === key ? ' selected' : '') + '>' +
-        esc(dayLabel(key)) + ' · ' + counts[key] + '</option>';
+        esc(dayLabel(key)) + label + '</option>';
     });
     return html;
   }
@@ -412,7 +486,11 @@ function wrapper(plugin_info) {
       '<label>Endpoint</label><input id="tat-api" type="text" value="' + String(cfg.apiBase).replace(/"/g, '&quot;') + '">' +
       '<label>Token</label><input id="tat-token" type="password" value="' + String(cfg.token).replace(/"/g, '&quot;') + '">' +
       '<label>Agent</label><input id="tat-agent" type="text" value="' + String(cfg.agent).replace(/"/g, '&quot;') + '">' +
-      '<label>Days</label><input id="tat-days" type="number" min="1" max="90" value="' + cfg.days + '">' +
+      '<label>Days</label><span><input id="tat-days" type="number" min="1" max="90" style="width:64px" value="' + cfg.days + '"> ' +
+      [7, 30, 90].map(function (d) {
+        return '<button type="button" style="margin-left:4px" onclick="var i=document.getElementById(\'tat-days\'); if(i){i.value=' + d + '}">' + d + 'd</button>';
+      }).join('') +
+      '</span>' +
       '<label>Day</label><select id="tat-day" onchange="plugin.tacticalActivityTracker.drawDay(this.value)">' +
       daySelectHtml() +
       '</select>' +
@@ -432,7 +510,10 @@ function wrapper(plugin_info) {
       '</p>' +
       '<p style="opacity:.7">Faction narrows the <b>list</b>, it does not filter the map: a trail is always one ' +
       'agent\'s path (GET /v1/intel/agent/{agent}/trail). To see several agents at once use Ops Overlay. ' +
-      'An empty trail means nobody relayed that agent, not that the agent was idle.</p>'
+      'An empty trail means nobody relayed that agent, not that the agent was idle.</p>' +
+      '<p style="opacity:.7">Days is how far back the server looks, up to its retention (' + RETENTION_HINT + '). ' +
+      'Relaying only started recently, so older days are empty for everyone until enough time has passed. ' +
+      'A long trail is thinned to a sample: the status line says how many actions it stands for.</p>'
     );
   }
 
